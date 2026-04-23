@@ -1,0 +1,167 @@
+{
+  "version": 1,
+  "exportedAt": "2026-04-23T01:49:18.663Z",
+  "services": [
+    {
+      "id": 1776907342714,
+      "barber": "João",
+      "serviceName": "Corte Social",
+      "price": 35,
+      "time": "14:00",
+      "paymentMethod": "PIX",
+      "date": "2026-04-22"
+    },
+    {
+      "id": 1776906298170,
+      "barber": "Guilherme",
+      "serviceName": "Pigmentação",
+      "price": 25,
+      "time": "11:00",
+      "paymentMethod": "PIX",
+      "date": "2026-04-22"
+    },
+    {
+      "id": 1776906292973,
+      "barber": "Guilherme",
+      "serviceName": "Combo (Corte + Barba)",
+      "price": 70,
+      "time": "10:00",
+      "paymentMethod": "Dinheiro",
+      "date": "2026-04-22"
+    },
+    {
+      "id": 1776906288237,
+      "barber": "Guilherme",
+      "serviceName": "Combo (Corte + Barba)",
+      "price": 70,
+      "time": "09:00",
+      "paymentMethod": "Dinheiro",
+      "date": "2026-04-22"
+    },
+    {
+      "id": 1776906284197,
+      "barber": "Henrique",
+      "serviceName": "Corte Degradê",
+      "price": 45,
+      "time": "10:30",
+      "paymentMethod": "Dinheiro",
+      "date": "2026-04-22"
+    },
+    {
+      "id": 1776906279952,
+      "barber": "Henrique",
+      "serviceName": "Corte Degradê",
+      "price": 45,
+      "time": "08:30",
+      "paymentMethod": "PIX",
+      "date": "2026-04-22"
+    },
+    {
+      "id": 1776906274432,
+      "barber": "Pedro",
+      "serviceName": "Sobrancelha",
+      "price": 15,
+      "time": "12:00",
+      "paymentMethod": "Débito",
+      "date": "2026-04-22"
+    },
+    {
+      "id": 1776906269674,
+      "barber": "Pedro",
+      "serviceName": "Corte Social",
+      "price": 35,
+      "time": "09:30",
+      "paymentMethod": "PIX",
+      "date": "2026-04-22"
+    },
+    {
+      "id": 1776906264497,
+      "barber": "Marcos",
+      "serviceName": "Corte Degradê",
+      "price": 45,
+      "time": "11:00",
+      "paymentMethod": "PIX",
+      "date": "2026-04-22"
+    },
+    {
+      "id": 1776906259486,
+      "barber": "Marcos",
+      "serviceName": "Corte Social",
+      "price": 35,
+      "time": "09:00",
+      "paymentMethod": "Dinheiro",
+      "date": "2026-04-22"
+    },
+    {
+      "id": 1776906253097,
+      "barber": "João",
+      "serviceName": "Barba Terapia",
+      "price": 30,
+      "time": "12:00",
+      "paymentMethod": "Crédito",
+      "date": "2026-04-22"
+    },
+    {
+      "id": 1776906246210,
+      "barber": "João",
+      "serviceName": "Corte Social",
+      "price": 35,
+      "time": "10:30",
+      "paymentMethod": "Débito",
+      "date": "2026-04-22"
+    },
+    {
+      "id": 1776905714090,
+      "barber": "João",
+      "serviceName": "Corte Social",
+      "price": 35,
+      "time": "08:00",
+      "paymentMethod": "PIX",
+      "date": "2026-04-22"
+    }
+  ],
+  "barbers": [
+    {
+      "id": 1,
+      "name": "João"
+    },
+    {
+      "id": 2,
+      "name": "Marcos"
+    },
+    {
+      "id": 3,
+      "name": "Pedro"
+    },
+    {
+      "id": 1776883418135,
+      "name": "Henrique"
+    },
+    {
+      "id": 1776883426135,
+      "name": "Guilherme"
+    }
+  ],
+  "users": [
+    {
+      "id": 1,
+      "username": "guilherme",
+      "password": "123"
+    },
+    {
+      "id": 1776867891629,
+      "username": "henrique",
+      "password": "4057"
+    }
+  ],
+  "cashHistory": [
+    {
+      "id": 1776906313120,
+      "date": "2026-04-22",
+      "openingValue": 50,
+      "observation": "",
+      "openedAt": "22:05",
+      "status": "aberto"
+    }
+  ]
+}

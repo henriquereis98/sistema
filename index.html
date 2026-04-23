@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Barbearia do Zé - Controle Interno</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body>
+    <!-- Tela de Login -->
+    <div id="login-container" class="login-container">
+        <div class="login-box glass">
+            <div class="logo-login">
+                <i class="fa-solid fa-scissors"></i>
+                <h2>Barbearia do Zééééééé</h2>
+            </div>
+            <p class="login-subtitle"></p>
+            <form id="login-form">
+                <div class="form-group">
+                    <label for="login-username">Usuário</label>
+                    <input type="text" id="login-username" required>
+                </div>
+                <div class="form-group">
+                    <label for="login-password">Senha</label>
+                    <input type="password" id="login-password" required>
+                </div>
+                <p id="login-error" class="error-msg" style="display: none;">Usuário ou senha incorretos!</p>
+                <button type="submit" class="btn-primary">Entrar no Sistema</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Sistema Principal -->
+    <div class="dashboard-container" id="app-container" style="display: none;">
+        <!-- Sidebar / Header -->
+        <header class="sidebar">
+            <div class="logo">
+                <i class="fa-solid fa-scissors"></i>
+                <h1>Barbearia do Zé</h1>
+            </div>
+            <nav>
+                <ul>
+                    <li class="active" id="nav-dashboard"><a href="#"><i class="fa-solid fa-chart-line"></i> Dashboard
+                            do Dia</a></li>
+                    <li id="nav-barbeiros"><a href="#"><i class="fa-solid fa-users"></i> Barbeiros</a></li>
+                    <li id="nav-financeiro"><a href="#"><i class="fa-solid fa-money-bill-trend-up"></i> Financeiro</a>
+                    </li>
+                    <li id="nav-comissoes"><a href="#"><i class="fa-solid fa-hand-holding-dollar"></i> Comissões</a>
+                    </li>
+                    <li id="nav-consumo"><a href="#"><i class="fa-solid fa-cart-shopping"></i> Consumo</a></li>
+                    <li id="nav-relatorios"><a href="#"><i class="fa-solid fa-chart-bar"></i> Relatórios</a></li>
+                    <li id="nav-config"><a href="#"><i class="fa-solid fa-gear"></i> Configurações</a></li>
+                </ul>
+            </nav>
+            <div class="user-info">
+                <div class="avatar" id="current-user-avatar">G</div>
+                <span id="current-user-name">Guilherme</span>
+                <button id="btn-logout" title="Sair" class="btn-logout"><i
+                        class="fa-solid fa-right-from-bracket"></i></button>
+            </div>
+        </header>
+
+        <!-- Botão Flutuante Caixa -->
+        <button class="btn-caixa" id="btn-caixa">
+            <i class="fa-solid fa-cash-register"></i> Caixa
+        </button>
+
+        <!-- Modal Abrir Caixa -->
+        <div class="modal-overlay" id="modal-caixa" style="display: none;">
+            <div class="modal-box glass">
+                <div class="modal-header">
+                    <h3><i class="fa-solid fa-cash-register"></i> Abrir Caixa</h3>
+                    <button class="modal-close" id="modal-caixa-close">&times;</button>
+                </div>
+                <form id="caixa-form">
+                    <div class="form-group">
+                        <label for="caixa-date">Data</label>
+                        <input type="date" id="caixa-date" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="caixa-value">Valor de Abertura (R$)</label>
+                        <input type="number" id="caixa-value" step="0.01" value="100.00" placeholder="Ex: 100,00">
+                    </div>
+                    <div class="form-group">
+                        <label for="caixa-obs">Observação</label>
+                        <input type="text" id="caixa-obs" placeholder="Ex: Troco inicial do dia">
+                    </div>
+                    <button type="submit" class="btn-primary btn-caixa-submit">Abrir Caixa</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-bar">
+                <h2 id="page-title">Resumo de Hoje</h2>
+                <div class="date-display" id="current-date">--/--/----</div>
+            </header>
+
+            <!-- View: Dashboard -->
+            <div id="view-dashboard">
+                <!-- Card Caixa (visível só quando aberto) -->
+                <div class="caixa-status-card glass" id="caixa-status" style="display: none;">
+                    <div class="caixa-status-left">
+                        <div class="caixa-status-badge" id="caixa-badge"><i class="fa-solid fa-cash-register"></i> Caixa
+                            Aberto</div>
+                        <div class="caixa-status-details">
+                            <span id="caixa-status-date"></span>
+                            <span class="caixa-obs-text" id="caixa-status-obs"></span>
+                        </div>
+                    </div>
+                    <div class="caixa-status-values">
+                        <div class="caixa-val-item">
+                            <span class="caixa-val-label">Abertura</span>
+                            <span class="caixa-val-number" id="caixa-val-abertura">R$ 0,00</span>
+                        </div>
+                        <div class="caixa-val-divider">+</div>
+                        <div class="caixa-val-item">
+                            <span class="caixa-val-label">Serviços</span>
+                            <span class="caixa-val-number" id="caixa-val-servicos">R$ 0,00</span>
+                        </div>
+                        <div class="caixa-val-divider">=</div>
+                        <div class="caixa-val-item caixa-val-total">
+                            <span class="caixa-val-label">Total no Caixa</span>
+                            <span class="caixa-val-number" id="caixa-val-total">R$ 0,00</span>
+                        </div>
+                    </div>
+                    <div class="caixa-status-action">
+                        <button class="btn-danger btn-fechar-caixa" id="btn-fechar-caixa" style="display: none;">
+                            <i class="fa-solid fa-lock"></i> Encerrar Expediente
+                        </button>
+                    </div>
+                </div>
+
+                <div class="content-grid" style="grid-template-columns: 1fr 2fr;">
+                    <!-- Coluna 1: Formulário -->
+                    <section class="register-section glass">
+                        <h3>Registrar Novo Serviço</h3>
+                        <form id="service-form">
+                            <div class="form-group">
+                                <label for="barber-select">Barbeiro</label>
+                                <select id="barber-select" required>
+                                    <option value="" disabled selected>Selecione quem atendeu</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="service-select">Serviço</label>
+                                <select id="service-select" required>
+                                    <option value="" disabled selected>Selecione o serviço</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="time-input">Horário</label>
+                                <input type="time" id="time-input" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="price-input">Valor (R$)</label>
+                                <input type="number" id="price-input" step="0.01" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="payment-method">Forma de Pagamento</label>
+                                <select id="payment-method" required>
+                                    <option value="" disabled selected>Selecione o pagamento</option>
+                                    <option value="Dinheiro">Dinheiro</option>
+                                    <option value="PIX">PIX</option>
+                                    <option value="Débito">Débito</option>
+                                    <option value="Crédito">Crédito</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="btn-primary">Registrar</button>
+                        </form>
+                    </section>
+
+                    <!-- Coluna 2: Agenda do Dia -->
+                    <section class="schedule-section glass" style="grid-column: span 1;">
+                        <h3>Agenda do Dia</h3>
+                        <div class="table-responsive schedule-wrapper">
+                            <table class="schedule-table" id="daily-schedule-table">
+                                <thead>
+                                    <tr id="schedule-header">
+                                        <!-- Preenchido via JS (Horário + Barbeiros) -->
+                                    </tr>
+                                </thead>
+                                <tbody id="schedule-body">
+                                    <!-- Preenchido via JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+            </div>
+
+            <!-- View: Financeiro -->
+            <div id="view-financeiro" style="display: none;">
+                <div class="header-actions">
+                    <h2 class="view-title"></h2>
+                </div>
+
+                <div class="report-filters glass" id="fin-filters">
+                    <div class="filter-chips">
+                        <button class="chip active" data-fin-period="today">Hoje</button>
+                        <button class="chip" data-fin-period="7days">Últimos 7 dias</button>
+                        <button class="chip" data-fin-period="30days">Últimos 30 dias</button>
+                        <button class="chip" data-fin-period="month">Mês Atual</button>
+                        <button class="chip" data-fin-period="custom">Personalizado</button>
+                    </div>
+                    <div class="custom-date-range" id="fin-custom-date-range" style="display: none;">
+                        <div class="date-input-group">
+                            <label for="fin-date-start">De</label>
+                            <input type="date" id="fin-date-start">
+                        </div>
+                        <div class="date-input-group">
+                            <label for="fin-date-end">Até</label>
+                            <input type="date" id="fin-date-end">
+                        </div>
+                        <button class="btn-primary btn-filter" id="fin-btn-apply-filter">Filtrar</button>
+                    </div>
+                </div>
+
+                <section class="summary-cards">
+                    <div class="card glass">
+                        <div class="card-icon"><i class="fa-solid fa-money-bill-wave"></i></div>
+                        <div class="card-info">
+                            <h3>Faturamento</h3>
+                            <p id="fin-total-revenue">R$ 0,00</p>
+                        </div>
+                    </div>
+                    <div class="card glass">
+                        <div class="card-icon"><i class="fa-solid fa-cut"></i></div>
+                        <div class="card-info">
+                            <h3>Serviços</h3>
+                            <p id="fin-total-services">0</p>
+                        </div>
+                    </div>
+                    <div class="card glass">
+                        <div class="card-icon"><i class="fa-solid fa-receipt"></i></div>
+                        <div class="card-info">
+                            <h3>Ticket Médio</h3>
+                            <p id="fin-avg-ticket">R$ 0,00</p>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="payment-methods-section glass" style="margin-top: 30px; padding: 25px;">
+                    <h3>Resumo por Forma de Pagamento</h3>
+                    <div class="payment-grid" id="payment-methods-grid">
+                        <!-- Preenchido via JS -->
+                    </div>
+                </section>
+            </div>
+
+            <!-- View: Comissões -->
+            <div id="view-comissoes" style="display: none;">
+                <div class="header-actions">
+                    <h2 class="view-title"></h2>
+                </div>
+
+                <div class="report-filters glass" id="com-filters">
+                    <div style="margin-bottom: 20px; display: flex; gap: 20px; align-items: flex-end; flex-wrap: wrap;">
+                        <div class="form-group" style="margin-bottom: 0; min-width: 200px;">
+                            <label for="com-barber-select">Barbeiro</label>
+                            <select id="com-barber-select">
+                                <option value="all">Todos os Barbeiros</option>
+                            </select>
+                        </div>
+                        <div class="filter-chips" style="margin-bottom: 0;">
+                            <button class="chip active" data-com-period="today">Hoje</button>
+                            <button class="chip" data-com-period="7days">7 dias</button>
+                            <button class="chip" data-com-period="30days">30 dias</button>
+                            <button class="chip" data-com-period="month">Mês Atual</button>
+                            <button class="chip" data-com-period="custom">Personalizado</button>
+                        </div>
+                    </div>
+
+                    <div class="custom-date-range" id="com-custom-date-range" style="display: none;">
+                        <div class="date-input-group">
+                            <label for="com-date-start">De</label>
+                            <input type="date" id="com-date-start">
+                        </div>
+                        <div class="date-input-group">
+                            <label for="com-date-end">Até</label>
+                            <input type="date" id="com-date-end">
+                        </div>
+                        <button class="btn-primary btn-filter" id="com-btn-apply-filter">Filtrar</button>
+                    </div>
+                </div>
+
+                <section class="summary-cards">
+                    <div class="card glass">
+                        <div class="card-icon"><i class="fa-solid fa-money-bill-wave"></i></div>
+                        <div class="card-info">
+                            <h3>Produção Total</h3>
+                            <p id="com-total-production">R$ 0,00</p>
+                        </div>
+                    </div>
+                    <div class="card glass">
+                        <div class="card-icon"><i class="fa-solid fa-hand-holding-dollar"></i></div>
+                        <div class="card-info">
+                            <h3>Comissão (50%)</h3>
+                            <p id="com-total-commission" style="color: #27ae60;">R$ 0,00</p>
+                        </div>
+                    </div>
+                    <div class="card glass">
+                        <div class="card-icon"><i class="fa-solid fa-cut"></i></div>
+                        <div class="card-info">
+                            <h3>Serviços Realizados</h3>
+                            <p id="com-service-count">0</p>
+                        </div>
+                    </div>
+                    <div class="card glass">
+                        <div class="card-icon"><i class="fa-solid fa-cart-shopping"></i></div>
+                        <div class="card-info">
+                            <h3>Consumo Interno</h3>
+                            <p id="com-total-consumo" style="color: var(--danger-color);">R$ 0,00</p>
+                        </div>
+                    </div>
+                    <div class="card glass" style="border: 1px solid var(--primary-color);">
+                        <div class="card-icon"><i class="fa-solid fa-wallet"></i></div>
+                        <div class="card-info">
+                            <h3>Total Líquido</h3>
+                            <p id="com-net-total">R$ 0,00</p>
+                        </div>
+                    </div>
+                </section>
+
+                <div class="content-grid" style="margin-top: 30px; grid-template-columns: 1fr;">
+                    <section class="history-section glass">
+                        <h3>Detalhamento dos Serviços</h3>
+                        <div id="com-history-container"></div>
+                    </section>
+                </div>
+            </div>
+
+            <!-- View: Consumo Interno -->
+            <div id="view-consumo" style="display: none;">
+                <div class="header-actions">
+                    <h2 class="view-title"></h2>
+                </div>
+
+                <div class="content-grid">
+                    <section class="register-section glass">
+                        <h3>Lançar Novo Consumo</h3>
+                        <form id="consumo-form">
+                            <div class="form-group">
+                                <label for="consumo-barber-select">Barbeiro</label>
+                                <select id="consumo-barber-select" required>
+                                    <option value="" disabled selected>Selecione o barbeiro</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="consumo-product-select">Produto</label>
+                                <select id="consumo-product-select" required>
+                                    <option value="" disabled selected>Selecione o produto</option>
+                                    <option value="Coca-Cola 350ml" data-price="6.00">Coca-Cola 350ml (R$ 6,00)</option>
+                                    <option value="Coca-Cola 200ml" data-price="4.00">Coca-Cola 200ml (R$ 4,00)</option>
+                                    <option value="Monster 473ml" data-price="12.00">Energetico Monster 473ml (R$ 12,00)
+                                    </option>
+                                    <option value="Baly 473ml" data-price="8.00">Energetico Baly 473ml (R$ 8,00)
+                                    </option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="consumo-price-input">Valor a Descontar (R$)</label>
+                                <input type="number" id="consumo-price-input" step="0.01" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="consumo-date-input">Data</label>
+                                <input type="date" id="consumo-date-input" required>
+                            </div>
+                            <button type="submit" class="btn-primary">Registrar Consumo</button>
+                        </form>
+                    </section>
+
+                    <section class="history-section glass">
+                        <h3>Histórico Recente</h3>
+                        <div id="consumo-history-list" class="barbers-list">
+                            <!-- Preenchido via JS -->
+                        </div>
+                    </section>
+                </div>
+            </div>
+
+            <!-- View: Barbeiros -->
+            <div id="view-barbeiros" style="display: none;">
+                <div class="content-grid">
+                    <section class="register-section glass">
+                        <h3>Cadastrar Novo Barbeiro</h3>
+                        <form id="barber-form">
+                            <div class="form-group">
+                                <label for="new-barber-name">Nome do Barbeiro</label>
+                                <input type="text" id="new-barber-name" required placeholder="Ex: Lucas">
+                            </div>
+                            <button type="submit" class="btn-primary">Cadastrar</button>
+                        </form>
+                    </section>
+
+                    <section class="history-section glass">
+                        <h3>Equipe Atual e Faturamento</h3>
+                        <div class="barbers-list" id="barbers-list-container">
+                            <!-- Preenchido via JS -->
+                        </div>
+                    </section>
+                </div>
+            </div>
+
+            <!-- View: Relatórios -->
+            <div id="view-relatorios" style="display: none;">
+                <div class="report-filters glass">
+                    <div class="filter-chips">
+                        <button class="chip active" data-period="today">Hoje</button>
+                        <button class="chip" data-period="7days">Últimos 7 dias</button>
+                        <button class="chip" data-period="30days">Últimos 30 dias</button>
+                        <button class="chip" data-period="month">Mês Atual</button>
+                        <button class="chip" data-period="custom">Personalizado</button>
+                    </div>
+                    <div class="custom-date-range" id="custom-date-range" style="display: none;">
+                        <div class="date-input-group">
+                            <label for="date-start">De</label>
+                            <input type="date" id="date-start">
+                        </div>
+                        <div class="date-input-group">
+                            <label for="date-end">Até</label>
+                            <input type="date" id="date-end">
+                        </div>
+                        <button class="btn-primary btn-filter" id="btn-apply-filter">Filtrar</button>
+                    </div>
+                </div>
+
+
+
+                <div class="content-grid">
+                    <section class="register-section glass">
+                        <h3>Ranking por Barbeiro</h3>
+                        <div id="ranking-container"></div>
+                    </section>
+                    <section class="history-section glass">
+                        <h3>Histórico de Caixa</h3>
+                        <div class="table-responsive">
+                            <table id="cash-history-table">
+                                <thead>
+                                    <tr>
+                                        <th>Data</th>
+                                        <th>Status</th>
+                                        <th>Abertura</th>
+                                        <th>Serviços</th>
+                                        <th>Total Final</th>
+                                        <th>Ação</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="cash-history-body">
+                                    <!-- Preenchido via JS -->
+                                </tbody>
+                            </table>
+                            <div id="cash-history-empty" class="empty-state" style="display: none;">
+                                <i class="fa-solid fa-cash-register"></i>
+                                <p>Nenhum caixa encontrado no período.</p>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <div class="content-grid" style="margin-top: 30px;">
+                    <section class="history-section glass" style="grid-column: 1 / -1;">
+                        <h3>Histórico Detalhado de Serviços</h3>
+                        <div id="report-history-container"></div>
+                    </section>
+                </div>
+            </div>
+
+            <!-- View: Configurações -->
+            <div id="view-configuracoes" style="display: none;">
+                <div class="content-grid">
+                    <!-- Gerenciar Usuários do Sistema -->
+                    <section class="register-section glass">
+                        <h3>Criar Novo Usuário</h3>
+                        <form id="new-user-form">
+                            <div class="form-group">
+                                <label for="new-system-username">Nome de Usuário</label>
+                                <input type="text" id="new-system-username" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="new-system-password">Senha</label>
+                                <input type="password" id="new-system-password" required>
+                            </div>
+                            <button type="submit" class="btn-primary">Adicionar Acesso</button>
+                        </form>
+                    </section>
+
+                    <!-- Lista de Usuários e Edição -->
+                    <section class="history-section glass">
+                        <h3>Usuários com Acesso</h3>
+                        <div class="barbers-list" id="users-list-container">
+                            <!-- Preenchido via JS -->
+                        </div>
+
+                        <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 30px 0;">
+
+                        <h3>Redefinir Minha Senha</h3>
+                        <form id="change-password-form">
+                            <div class="form-group">
+                                <label for="change-password-new">Nova Senha</label>
+                                <input type="password" id="change-password-new" required>
+                            </div>
+                            <button type="submit" class="btn-primary">Atualizar Senha</button>
+                        </form>
+
+                        <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 30px 0;">
+
+                        <h3><i class="fa-solid fa-database"></i> Backup dos Dados</h3>
+                        <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 20px;">
+                            Exporte seus dados para um arquivo e importe em outro computador.
+                        </p>
+                        <div class="backup-actions">
+                            <button class="btn-backup btn-export" id="btn-export">
+                                <i class="fa-solid fa-download"></i> Exportar Dados
+                            </button>
+                            <button class="btn-backup btn-import" id="btn-import">
+                                <i class="fa-solid fa-upload"></i> Importar Dados
+                            </button>
+                            <input type="file" id="import-file-input" accept=".json" style="display: none;">
+                        </div>
+
+                        <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 30px 0;">
+
+                        <h3><i class="fa-solid fa-broom"></i> Limpar Dados (Ambiente de Teste)</h3>
+                        <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 20px;">
+                            Apague todos os serviços lançados e o histórico de caixa. Barbeiros e usuários serão
+                            mantidos.
+                        </p>
+                        <button class="btn-danger" id="btn-clear-financial"
+                            style="width: auto; padding: 12px 20px; font-weight: 600;">
+                            <i class="fa-solid fa-trash-can"></i> Zerar Dados Financeiros
+                        </button>
+                    </section>
+                </div>
+            </div>
+
+        </main>
+    </div>
+    <script src="script.js"></script>
+</body>
+
+</html>
