@@ -34,6 +34,41 @@ body {
     border-radius: 12px;
 }
 
+/* Caixa Warning */
+.caixa-warning {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 20px;
+    margin-bottom: 25px;
+    border: 1px solid rgba(218, 165, 32, 0.3);
+    background: rgba(218, 165, 32, 0.05);
+}
+
+.warning-icon {
+    font-size: 2rem;
+    color: var(--primary-color);
+}
+
+.warning-text {
+    flex: 1;
+}
+
+.warning-text h4 {
+    margin-bottom: 5px;
+    color: var(--primary-color);
+}
+
+.warning-text p {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.caixa-warning .btn-primary {
+    width: auto;
+    padding: 10px 20px;
+}
+
 /* --- Tela de Login --- */
 .login-container {
     display: flex;
@@ -144,6 +179,47 @@ nav li a:hover, nav li.active a {
     border-right: 3px solid var(--primary-color);
 }
 
+/* Submenu Styles */
+.has-submenu {
+    position: relative;
+}
+
+.submenu-toggle {
+    justify-content: space-between !important;
+}
+
+.submenu-icon {
+    font-size: 0.8rem;
+    transition: transform 0.3s ease;
+}
+
+.has-submenu.open .submenu-icon {
+    transform: rotate(180deg);
+}
+
+.submenu {
+    list-style: none;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.has-submenu.open .submenu {
+    max-height: 200px;
+}
+
+.submenu li a {
+    padding: 10px 20px 10px 50px;
+    font-size: 0.9rem;
+    border-right: none !important;
+}
+
+.submenu li a:hover, .submenu li.active a {
+    background: rgba(212, 175, 55, 0.05);
+    color: var(--primary-color);
+}
+
 .user-info {
     padding: 20px;
     border-top: 1px solid var(--border-color);
@@ -252,6 +328,32 @@ nav li a:hover, nav li.active a {
     font-size: 1.8rem;
     font-weight: 700;
     color: var(--primary-color);
+}
+
+/* Dashboard Chart */
+.chart-container-main {
+    padding: 25px;
+    margin-bottom: 30px;
+    height: 350px;
+    display: flex;
+    flex-direction: column;
+}
+
+.chart-header {
+    margin-bottom: 20px;
+}
+
+.chart-header h3 {
+    margin-bottom: 0;
+    border: none;
+    font-size: 1.1rem;
+    color: var(--text-main);
+}
+
+.canvas-wrapper {
+    flex: 1;
+    position: relative;
+    min-height: 0;
 }
 
 /* Content Grid */
@@ -454,6 +556,66 @@ td:last-child {
 .barber-right {
     display: flex;
     align-items: center;
+}
+
+/* Success Button */
+.btn-success {
+    background: #27ae60;
+    color: #fff;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.btn-success:hover {
+    background: #219a52;
+}
+
+/* Action Buttons for Tables */
+.action-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.btn-icon {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-icon:hover {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+.btn-icon.delete:hover {
+    border-color: var(--danger-color);
+    color: var(--danger-color);
+}
+
+/* Inventory Badge */
+.badge {
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.badge-low {
+    background: rgba(231, 76, 60, 0.15);
+    color: #e74c3c;
+}
+
+.badge-ok {
+    background: rgba(39, 174, 96, 0.15);
+    color: #27ae60;
 }
 
 /* Responsiveness */
@@ -1094,4 +1256,95 @@ td:last-child {
 .payment-stats-info small {
     font-size: 0.75rem;
     color: var(--text-muted);
+}
+.slot-occupied {
+    background: rgba(218, 165, 32, 0.1) !important;
+    border-left: 4px solid var(--primary-color) !important;
+    color: var(--primary-color) !important;
+}
+
+.slot-content {
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    padding-right: 25px;
+}
+
+.slot-content span {
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+
+.slot-content small {
+    opacity: 0.8;
+    font-size: 0.75rem;
+}
+
+.slot-actions {
+    position: absolute;
+    top: 50%;
+    right: 0;
+    transform: translateY(-50%);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.slot-occupied:hover .slot-actions {
+    opacity: 1;
+}
+
+.slot-actions button {
+    background: transparent;
+    border: none;
+    color: var(--danger-color);
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 5px;
+}
+
+.slot-actions button:hover {
+    transform: scale(1.2);
+}
+
+/* Print Styles (PDF) */
+@media print {
+    .sidebar, .btn-caixa, .top-bar, .report-filters, .slot-actions, .btn-primary, .btn-success, .btn-danger, .action-buttons {
+        display: none !important;
+    }
+
+    .main-content {
+        padding: 0;
+        margin: 0;
+        background: #fff;
+        color: #000;
+    }
+
+    .glass {
+        background: #fff !important;
+        backdrop-filter: none !important;
+        border: none !important;
+        box-shadow: none !important;
+        color: #000 !important;
+    }
+
+    h2, h3, h4, th, td {
+        color: #000 !important;
+    }
+
+    table {
+        border: 1px solid #ddd;
+    }
+
+    th {
+        background: #f4f4f4 !important;
+        color: #000 !important;
+    }
+
+    .card {
+        border: 1px solid #ddd !important;
+    }
+
+    .page-break {
+        page-break-before: always;
+    }
 }

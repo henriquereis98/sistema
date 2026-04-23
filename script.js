@@ -24,11 +24,16 @@ let allServices = [];
 let users = [];
 let currentUser = null;
 let currentReportPeriod = 'today';
+let currentRelCaixaPeriod = 'today';
+let currentRelServicosPeriod = 'today';
 let currentFinanceiroPeriod = 'today';
 let currentComissoesPeriod = 'today';
 let currentComissoesBarber = 'all';
-let cashHistory = JSON.parse(localStorage.getItem('barbearia_cash_history')) || [];
-let allConsumption = JSON.parse(localStorage.getItem('barbearia_consumption')) || [];
+let cashHistory = JSON.parse(localStorage.getItem('barbearia_ze_cash_history')) || [];
+let allConsumption = JSON.parse(localStorage.getItem('barbearia_ze_consumption')) || [];
+let inventory = JSON.parse(localStorage.getItem('barbearia_ze_inventory')) || [];
+let productSales = JSON.parse(localStorage.getItem('barbearia_ze_product_sales')) || [];
+let dashboardChart = null;
 
 // ---- Helpers de Data ----
 function getTodayKey() {
@@ -93,15 +98,18 @@ const currentUserName = document.getElementById('current-user-name');
 
 // Elementos do DOM - Navegação
 const navDashboard = document.getElementById('nav-dashboard');
-const navBarbeiros = document.getElementById('nav-barbeiros');
 const navFinanceiro = document.getElementById('nav-financeiro');
-const navRelatorios = document.getElementById('nav-relatorios');
 const navConfig = document.getElementById('nav-config');
+const navRelCaixa = document.getElementById('nav-rel-caixa');
+const navRelServicos = document.getElementById('nav-rel-servicos');
+const navRelatoriosParent = document.getElementById('nav-relatorios-parent');
 const viewDashboard = document.getElementById('view-dashboard');
-const viewBarbeiros = document.getElementById('view-barbeiros');
 const viewFinanceiro = document.getElementById('view-financeiro');
-const viewRelatorios = document.getElementById('view-relatorios');
 const viewConfig = document.getElementById('view-configuracoes');
+const viewRelCaixa = document.getElementById('view-rel-caixa');
+const viewRelServicos = document.getElementById('view-rel-servicos');
+const navEstoque = document.getElementById('nav-estoque');
+const viewEstoque = document.getElementById('view-estoque');
 const pageTitle = document.getElementById('page-title');
 
 // Elementos do DOM - Dashboard
@@ -131,11 +139,22 @@ const changePasswordNew = document.getElementById('change-password-new');
 
 // Elementos do DOM - Relatórios
 const rankingContainer = document.getElementById('ranking-container');
+
+// Elementos do DOM - Relatório Caixa
+const customDateRangeCaixa = document.getElementById('custom-date-range-caixa');
+const dateStartInputCaixa = document.getElementById('date-start-caixa');
+const dateEndInputCaixa = document.getElementById('date-end-caixa');
+const btnApplyFilterCaixa = document.getElementById('btn-apply-filter-caixa');
+const cashHistoryTable = document.getElementById('cash-history-table');
+const cashHistoryBody = document.getElementById('cash-history-body');
+const cashHistoryEmpty = document.getElementById('cash-history-empty');
+
+// Elementos do DOM - Relatório Serviços
+const customDateRangeServicos = document.getElementById('custom-date-range-servicos');
+const dateStartInputServicos = document.getElementById('date-start-servicos');
+const dateEndInputServicos = document.getElementById('date-end-servicos');
+const btnApplyFilterServicos = document.getElementById('btn-apply-filter-servicos');
 const reportHistoryContainer = document.getElementById('report-history-container');
-const customDateRange = document.getElementById('custom-date-range');
-const dateStartInput = document.getElementById('date-start');
-const dateEndInput = document.getElementById('date-end');
-const btnApplyFilter = document.getElementById('btn-apply-filter');
 
 // Elementos do DOM - Financeiro
 const finTotalRevenue = document.getElementById('fin-total-revenue');
@@ -143,6 +162,7 @@ const finTotalServices = document.getElementById('fin-total-services');
 const finAvgTicket = document.getElementById('fin-avg-ticket');
 const finCustomDateRange = document.getElementById('fin-custom-date-range');
 const finDateStartInput = document.getElementById('fin-date-start');
+const finDateEndInput = document.getElementById('fin-date-end');
 const finBtnApplyFilter = document.getElementById('fin-btn-apply-filter');
 const paymentMethodsGrid = document.getElementById('payment-methods-grid');
 
@@ -187,9 +207,6 @@ const caixaValServicos = document.getElementById('caixa-val-servicos');
 const caixaValTotal = document.getElementById('caixa-val-total');
 const btnFecharCaixa = document.getElementById('btn-fechar-caixa');
 const caixaBadge = document.getElementById('caixa-badge');
-const cashHistoryTable = document.getElementById('cash-history-body');
-const cashHistoryEmpty = document.getElementById('cash-history-empty');
-
 // Inicialização
 function init() {
     loadFromLocalStorage();
@@ -242,32 +259,39 @@ function showApp() {
     setupComissoesFilters();
     setupConsumo();
     setupCaixa();
+    setupEstoque();
+    renderDashboardChart();
 }
 
-loginForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const user = loginUsernameInput.value.trim().toLowerCase();
-    const pass = loginPasswordInput.value;
 
-    const validUser = users.find(u => u.username.toLowerCase() === user && u.password === pass);
-    
-    if (validUser) {
-        loginError.style.display = 'none';
-        sessionStorage.setItem('barbearia_logged_in', JSON.stringify(validUser));
-        currentUser = validUser;
-        showApp();
-    } else {
-        loginError.style.display = 'block';
-    }
-});
+if (loginForm) {
+    loginForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const user = loginUsernameInput.value.trim().toLowerCase();
+        const pass = loginPasswordInput.value;
 
-btnLogout.addEventListener('click', () => {
-    sessionStorage.removeItem('barbearia_logged_in');
-    currentUser = null;
-    loginUsernameInput.value = '';
-    loginPasswordInput.value = '';
-    showLogin();
-});
+        const validUser = users.find(u => u.username.toLowerCase() === user && u.password === pass);
+        
+        if (validUser) {
+            if (loginError) loginError.style.display = 'none';
+            currentUser = validUser;
+            sessionStorage.setItem('barbearia_logged_in', JSON.stringify(currentUser));
+            showApp();
+        } else {
+            if (loginError) loginError.style.display = 'block';
+        }
+    });
+}
+
+if (btnLogout) {
+    btnLogout.addEventListener('click', () => {
+        sessionStorage.removeItem('barbearia_logged_in');
+        currentUser = null;
+        loginUsernameInput.value = '';
+        loginPasswordInput.value = '';
+        showLogin();
+    });
+}
 
 function displayCurrentDate() {
     const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
@@ -279,29 +303,43 @@ function displayCurrentDate() {
 
 // ---- Navegação ----
 function setupNavigation() {
-    navDashboard.addEventListener('click', (e) => { e.preventDefault(); switchView('dashboard'); });
-    navBarbeiros.addEventListener('click', (e) => { e.preventDefault(); switchView('barbeiros'); });
-    navFinanceiro.addEventListener('click', (e) => { e.preventDefault(); switchView('financeiro'); });
+    if (navDashboard) navDashboard.addEventListener('click', (e) => { e.preventDefault(); switchView('dashboard'); });
+    if (navFinanceiro) navFinanceiro.addEventListener('click', (e) => { e.preventDefault(); switchView('financeiro'); });
     if (navComissoes) navComissoes.addEventListener('click', (e) => { e.preventDefault(); switchView('comissoes'); });
     if (navConsumo) navConsumo.addEventListener('click', (e) => { e.preventDefault(); switchView('consumo'); });
-    navRelatorios.addEventListener('click', (e) => { e.preventDefault(); switchView('relatorios'); });
+    if (navEstoque) navEstoque.addEventListener('click', (e) => { e.preventDefault(); switchView('estoque'); });
+    
+    // Submenu Toggle
+    const submenuToggle = document.querySelector('.submenu-toggle');
+    if (submenuToggle) {
+        submenuToggle.addEventListener('click', (e) => {
+            e.preventDefault();
+            navRelatoriosParent.classList.toggle('open');
+        });
+    }
+
+    if (navRelCaixa) navRelCaixa.addEventListener('click', (e) => { e.preventDefault(); switchView('rel-caixa'); });
+    if (navRelServicos) navRelServicos.addEventListener('click', (e) => { e.preventDefault(); switchView('rel-servicos'); });
     navConfig.addEventListener('click', (e) => { e.preventDefault(); switchView('config'); });
 }
 
 function switchView(viewName) {
-    navDashboard.classList.remove('active');
-    navBarbeiros.classList.remove('active');
+    if (navDashboard) navDashboard.classList.remove('active');
     if (navFinanceiro) navFinanceiro.classList.remove('active');
     if (navComissoes) navComissoes.classList.remove('active');
     if (navConsumo) navConsumo.classList.remove('active');
-    navRelatorios.classList.remove('active');
-    navConfig.classList.remove('active');
+    if (navRelCaixa) navRelCaixa.classList.remove('active');
+    if (navRelServicos) navRelServicos.classList.remove('active');
+    if (navConfig) navConfig.classList.remove('active');
+    if (navEstoque) navEstoque.classList.remove('active');
+
+    if (viewEstoque) viewEstoque.style.display = 'none';
     viewDashboard.style.display = 'none';
-    viewBarbeiros.style.display = 'none';
     if (viewFinanceiro) viewFinanceiro.style.display = 'none';
     if (viewComissoes) viewComissoes.style.display = 'none';
     if (viewConsumo) viewConsumo.style.display = 'none';
-    viewRelatorios.style.display = 'none';
+    if (viewRelCaixa) viewRelCaixa.style.display = 'none';
+    if (viewRelServicos) viewRelServicos.style.display = 'none';
     viewConfig.style.display = 'none';
 
     if (viewName === 'dashboard') {
@@ -309,16 +347,21 @@ function switchView(viewName) {
         viewDashboard.style.display = 'block';
         pageTitle.textContent = 'Dashboard do Dia';
         updateDashboard();
-    } else if (viewName === 'barbeiros') {
-        navBarbeiros.classList.add('active');
-        viewBarbeiros.style.display = 'block';
-        pageTitle.textContent = 'Gerenciar Equipe';
-        renderBarbersList();
     } else if (viewName === 'financeiro') {
         if (navFinanceiro) navFinanceiro.classList.add('active');
         if (viewFinanceiro) viewFinanceiro.style.display = 'block';
-        pageTitle.textContent = 'Painel Financeiro';
+        pageTitle.textContent = 'Resumo Financeiro';
         updateFinanceiro();
+    } else if (viewName === 'rel-caixa') {
+        if (navRelCaixa) navRelCaixa.classList.add('active');
+        if (viewRelCaixa) viewRelCaixa.style.display = 'block';
+        pageTitle.textContent = 'Histórico de Caixa';
+        updateReportsCaixa();
+    } else if (viewName === 'rel-servicos') {
+        if (navRelServicos) navRelServicos.classList.add('active');
+        if (viewRelServicos) viewRelServicos.style.display = 'block';
+        pageTitle.textContent = 'Histórico de Serviços';
+        updateReportsServicos();
     } else if (viewName === 'comissoes') {
         if (navComissoes) navComissoes.classList.add('active');
         if (viewComissoes) viewComissoes.style.display = 'block';
@@ -329,16 +372,28 @@ function switchView(viewName) {
         if (viewConsumo) viewConsumo.style.display = 'block';
         pageTitle.textContent = 'Consumo Interno';
         renderConsumoList();
-    } else if (viewName === 'relatorios') {
-        navRelatorios.classList.add('active');
-        viewRelatorios.style.display = 'block';
-        pageTitle.textContent = 'Relatórios';
-        updateReports();
+    } else if (viewName === 'rel-caixa') {
+        if (navRelCaixa) navRelCaixa.classList.add('active');
+        if (viewRelCaixa) viewRelCaixa.style.display = 'block';
+        pageTitle.textContent = 'Histórico de Caixa';
+        updateReportsCaixa();
+    } else if (viewName === 'rel-servicos') {
+        if (navRelServicos) navRelServicos.classList.add('active');
+        if (viewRelServicos) viewRelServicos.style.display = 'block';
+        pageTitle.textContent = 'Histórico de Serviços';
+        updateReportsServicos();
     } else if (viewName === 'config') {
         navConfig.classList.add('active');
         viewConfig.style.display = 'block';
         pageTitle.textContent = 'Configurações do Sistema';
+        renderBarbersList();
         renderUsersList();
+    } else if (viewName === 'estoque') {
+        if (navEstoque) navEstoque.classList.add('active');
+        if (viewEstoque) viewEstoque.style.display = 'block';
+        pageTitle.textContent = 'Estoque e Vendas';
+        renderInventory();
+        populateProductSelect();
     }
 }
 
@@ -427,6 +482,7 @@ serviceForm.addEventListener('submit', (e) => {
 function updateDashboard() {
     renderDailySchedule();
     updateCaixaStatus();
+    renderDashboardChart();
 }
 
 function renderDailySchedule() {
@@ -465,7 +521,15 @@ function renderDailySchedule() {
             
             if (existingService) {
                 td.className = 'slot-occupied';
-                td.innerHTML = `${existingService.serviceName}<br><small>R$ ${existingService.price.toFixed(2).replace('.', ',')}</small>`;
+                td.innerHTML = `
+                    <div class="slot-content">
+                        <span>${existingService.serviceName}</span>
+                        <small>R$ ${existingService.price.toFixed(2).replace('.', ',')}</small>
+                        <div class="slot-actions">
+                            <button onclick="event.stopPropagation(); deleteService(${existingService.id})"><i class="fa-solid fa-trash"></i></button>
+                        </div>
+                    </div>
+                `;
                 td.title = 'Serviço já registrado';
             } else {
                 td.className = 'slot-free';
@@ -481,6 +545,89 @@ function renderDailySchedule() {
 
         scheduleBody.appendChild(tr);
     });
+}
+
+window.deleteService = function(id) {
+    if (confirm('Deseja excluir este serviço?')) {
+        allServices = allServices.filter(s => s.id !== id);
+        saveServicesToStorage();
+        updateDashboard();
+        if(navFinanceiro && navFinanceiro.classList.contains('active')) updateFinanceiro();
+        if(navRelCaixa && navRelCaixa.classList.contains('active')) updateReportsCaixa();
+        if(navRelServicos && navRelServicos.classList.contains('active')) updateReportsServicos();
+    }
+};
+
+window.editService = function(id) {
+    const service = allServices.find(s => s.id === id);
+    if (!service) return;
+
+    document.getElementById('edit-service-id').value = id;
+    
+    // Populate selects
+    const barberSelectEdit = document.getElementById('edit-barber-select');
+    const serviceSelectEdit = document.getElementById('edit-service-select');
+    
+    barberSelectEdit.innerHTML = '';
+    barbers.forEach(b => {
+        const opt = document.createElement('option');
+        opt.value = b.name;
+        opt.textContent = b.name;
+        if(b.name === service.barber) opt.selected = true;
+        barberSelectEdit.appendChild(opt);
+    });
+
+    serviceSelectEdit.innerHTML = '';
+    services.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = s.name;
+        if(s.name === service.serviceName) opt.selected = true;
+        serviceSelectEdit.appendChild(opt);
+    });
+
+    document.getElementById('edit-time-input').value = service.time;
+    document.getElementById('edit-price-input').value = service.price.toFixed(2);
+    document.getElementById('edit-payment-method').value = service.paymentMethod;
+    document.getElementById('edit-date-input').value = service.date;
+
+    document.getElementById('modal-edit-service').style.display = 'flex';
+};
+
+// Setup Modal Edit Listeners
+const modalEditClose = document.getElementById('modal-edit-close');
+const editServiceForm = document.getElementById('edit-service-form');
+
+if (modalEditClose) {
+    modalEditClose.onclick = () => { document.getElementById('modal-edit-service').style.display = 'none'; };
+}
+
+if (editServiceForm) {
+    editServiceForm.onsubmit = (e) => {
+        e.preventDefault();
+        const id = parseInt(document.getElementById('edit-service-id').value);
+        const index = allServices.findIndex(s => s.id === id);
+        
+        if (index !== -1) {
+            const serviceId = parseInt(document.getElementById('edit-service-select').value);
+            const serviceObj = services.find(s => s.id === serviceId);
+
+            allServices[index].barber = document.getElementById('edit-barber-select').value;
+            allServices[index].serviceName = serviceObj ? serviceObj.name : allServices[index].serviceName;
+            allServices[index].time = document.getElementById('edit-time-input').value;
+            allServices[index].price = parseFloat(document.getElementById('edit-price-input').value);
+            allServices[index].paymentMethod = document.getElementById('edit-payment-method').value;
+            allServices[index].date = document.getElementById('edit-date-input').value;
+
+            saveServicesToStorage();
+            document.getElementById('modal-edit-service').style.display = 'none';
+            updateDashboard();
+            if(navFinanceiro && navFinanceiro.classList.contains('active')) updateFinanceiro();
+            if(navRelCaixa && navRelCaixa.classList.contains('active')) updateReportsCaixa();
+            if(navRelServicos && navRelServicos.classList.contains('active')) updateReportsServicos();
+            alert('Serviço atualizado!');
+        }
+    };
 }
 // Financeiro
 function setupFinanceiroFilters() {
@@ -517,24 +664,29 @@ function getFinanceiroDateRange() {
 
 function updateFinanceiro() {
     const { start, end } = getFinanceiroDateRange();
-    const filtered = getServicesByDateRange(start, end);
     
-    const totalRevenue = filtered.reduce((acc, curr) => acc + curr.price, 0);
-    const totalCount = filtered.length;
+    const filteredServices = getServicesByDateRange(start, end);
+    const filteredSales = productSales.filter(s => s.date >= start && s.date <= end);
+    
+    const servicesRevenue = filteredServices.reduce((acc, curr) => acc + curr.price, 0);
+    const salesRevenue = filteredSales.reduce((acc, curr) => acc + (curr.price * curr.quantity), 0);
+    
+    const totalRevenue = servicesRevenue + salesRevenue;
+    const totalCount = filteredServices.length + filteredSales.length;
     const avgTicket = totalCount > 0 ? totalRevenue / totalCount : 0;
 
     if(finTotalRevenue) finTotalRevenue.textContent = `R$ ${totalRevenue.toFixed(2).replace('.', ',')}`;
-    if(finTotalServices) finTotalServices.textContent = totalCount;
+    if(finTotalServices) finTotalServices.textContent = filteredServices.length;
     if(finAvgTicket) finAvgTicket.textContent = `R$ ${avgTicket.toFixed(2).replace('.', ',')}`;
 
-    // Resumo por forma de pagamento
-    renderPaymentBreakdown(filtered);
+    // Resumo por forma de pagamento (incluindo vendas)
+    renderPaymentBreakdown(filteredServices, filteredSales);
 }
 
-function renderPaymentBreakdown(servicesList) {
+function renderPaymentBreakdown(servicesList, salesList = []) {
     if (!paymentMethodsGrid) return;
     
-    const methods = ['Dinheiro', 'PIX', 'Débito', 'Crédito'];
+    const methods = ['Dinheiro', 'PIX', 'Débito', 'Crédito', 'Cartão'];
     const stats = {};
     methods.forEach(m => stats[m] = { revenue: 0, count: 0 });
     
@@ -542,6 +694,14 @@ function renderPaymentBreakdown(servicesList) {
         const method = s.paymentMethod;
         if (method && stats[method]) {
             stats[method].revenue += s.price;
+            stats[method].count++;
+        }
+    });
+
+    salesList.forEach(s => {
+        const method = s.paymentMethod === 'Cartão' ? 'Cartão' : s.paymentMethod;
+        if (method && stats[method]) {
+            stats[method].revenue += (s.price * s.quantity);
             stats[method].count++;
         }
     });
@@ -688,7 +848,7 @@ function renderComissoesHistory(servicesList, consumptionList = []) {
                         <tr>
                             <td>${formatDateBR(c.date)}</td>
                             <td>${c.barber}</td>
-                            <td>${c.product}</td>
+                            <td>${c.productName || c.product}</td>
                             <td style="color: var(--danger-color); font-weight: 600;">- R$ ${c.price.toFixed(2).replace('.', ',')}</td>
                         </tr>
                     `).join('')}
@@ -704,9 +864,11 @@ function renderComissoesHistory(servicesList, consumptionList = []) {
 function setupConsumo() {
     if (consumoProductSelect) {
         consumoProductSelect.addEventListener('change', (e) => {
-            const selectedOption = e.target.options[e.target.selectedIndex];
-            const price = selectedOption.dataset.price;
-            if (price) consumoPriceInput.value = price;
+            const prodId = parseInt(e.target.value);
+            const product = inventory.find(p => p.id === prodId);
+            if (product) {
+                consumoPriceInput.value = product.price.toFixed(2);
+            }
         });
     }
 
@@ -723,20 +885,40 @@ function setupConsumo() {
                 return;
             }
 
+            const prodId = parseInt(product);
+            const inventoryItem = inventory.find(p => p.id === prodId);
+
+            if (!inventoryItem) {
+                alert('Produto não encontrado no estoque.');
+                return;
+            }
+
+            if (inventoryItem.stock <= 0) {
+                alert('Estoque esgotado para este produto!');
+                return;
+            }
+
+            // Baixa no estoque
+            inventoryItem.stock--;
+            saveInventoryToStorage();
+
             const newConsumo = {
                 id: Date.now(),
                 barber,
-                product,
+                productId: prodId,
+                productName: inventoryItem.name,
                 price,
                 date
             };
 
             allConsumption.unshift(newConsumo);
-            localStorage.setItem('barbearia_consumption', JSON.stringify(allConsumption));
+            localStorage.setItem('barbearia_ze_consumption', JSON.stringify(allConsumption));
             
             consumoForm.reset();
             renderConsumoList();
-            alert('Consumo registrado com sucesso!');
+            renderInventory(); // Atualiza tabela de estoque
+            populateProductSelect(); // Atualiza dropdowns
+            alert('Consumo registrado e estoque atualizado!');
         });
     }
     
@@ -762,7 +944,7 @@ function renderConsumoList() {
                 <div class="avatar-small">${c.barber.charAt(0)}</div>
                 <div>
                     <h4>${c.barber}</h4>
-                    <small>${c.product} - ${formatDateBR(c.date)}</small>
+                    <small>${c.productName || c.product} - ${formatDateBR(c.date)}</small>
                 </div>
             </div>
             <div class="barber-right">
@@ -777,25 +959,39 @@ function renderConsumoList() {
 }
 
 window.deleteConsumo = function(id) {
-    if (confirm('Deseja excluir este lançamento?')) {
+    if (confirm('Deseja excluir este lançamento? O item voltará para o estoque.')) {
+        const item = allConsumption.find(c => c.id === id);
+        if (item && item.productId) {
+            const inventoryItem = inventory.find(p => p.id === item.productId);
+            if (inventoryItem) {
+                inventoryItem.stock++;
+                saveInventoryToStorage();
+            }
+        }
+
         allConsumption = allConsumption.filter(c => c.id !== id);
-        localStorage.setItem('barbearia_consumption', JSON.stringify(allConsumption));
+        localStorage.setItem('barbearia_ze_consumption', JSON.stringify(allConsumption));
         renderConsumoList();
+        renderInventory();
+        populateProductSelect();
+        alert('Lançamento excluído e estoque devolvido.');
     }
 }
 
 // ---- Aba Barbeiros ----
-barberForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const name = newBarberName.value.trim();
-    if(name) {
-        barbers.push({ id: Date.now(), name: name });
-        saveBarbersToStorage();
-        newBarberName.value = '';
-        renderBarbersList();
-        populateSelects();
-    }
-});
+if (barberForm) {
+    barberForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const name = newBarberName.value.trim();
+        if(name) {
+            barbers.push({ id: Date.now(), name: name });
+            saveBarbersToStorage();
+            newBarberName.value = '';
+            renderBarbersList();
+            populateSelects();
+        }
+    });
+}
 
 function deleteBarber(id) {
     if(confirm('Remover este barbeiro?')) {
@@ -840,56 +1036,85 @@ function renderBarbersList() {
 
 // ---- Aba Relatórios ----
 function setupReportFilters() {
-    const chips = document.querySelectorAll('.chip[data-period]');
-    chips.forEach(chip => {
+    // Filtros do Caixa
+    const chipsCaixa = document.querySelectorAll('#view-rel-caixa .chip[data-period]');
+    chipsCaixa.forEach(chip => {
         chip.addEventListener('click', () => {
-            chips.forEach(c => c.classList.remove('active'));
+            chipsCaixa.forEach(c => c.classList.remove('active'));
             chip.classList.add('active');
-            currentReportPeriod = chip.dataset.period;
+            currentRelCaixaPeriod = chip.dataset.period;
 
-            if (currentReportPeriod === 'custom') {
-                customDateRange.style.display = 'flex';
+            if (currentRelCaixaPeriod === 'custom') {
+                customDateRangeCaixa.style.display = 'flex';
             } else {
-                customDateRange.style.display = 'none';
-                updateReports();
+                customDateRangeCaixa.style.display = 'none';
+                updateReportsCaixa();
             }
         });
     });
 
-    btnApplyFilter.addEventListener('click', () => {
-        if (dateStartInput.value && dateEndInput.value) {
-            updateReports();
-        } else {
-            alert('Selecione as datas de início e fim.');
-        }
+    if (btnApplyFilterCaixa) {
+        btnApplyFilterCaixa.addEventListener('click', () => {
+            if (dateStartInputCaixa.value && dateEndInputCaixa.value) {
+                updateReportsCaixa();
+            } else {
+                alert('Selecione as datas de início e fim.');
+            }
+        });
+    }
+
+    // Filtros dos Serviços
+    const chipsServicos = document.querySelectorAll('#view-rel-servicos .chip[data-period]');
+    chipsServicos.forEach(chip => {
+        chip.addEventListener('click', () => {
+            chipsServicos.forEach(c => c.classList.remove('active'));
+            chip.classList.add('active');
+            currentRelServicosPeriod = chip.dataset.period;
+
+            if (currentRelServicosPeriod === 'custom') {
+                customDateRangeServicos.style.display = 'flex';
+            } else {
+                customDateRangeServicos.style.display = 'none';
+                updateReportsServicos();
+            }
+        });
     });
+
+    if (btnApplyFilterServicos) {
+        btnApplyFilterServicos.addEventListener('click', () => {
+            if (dateStartInputServicos.value && dateEndInputServicos.value) {
+                updateReportsServicos();
+            } else {
+                alert('Selecione as datas de início e fim.');
+            }
+        });
+    }
 }
 
-function getReportDateRange() {
-    return getDateRange(currentReportPeriod, dateStartInput, dateEndInput);
-}
-
-function updateReports() {
-    const { start, end } = getReportDateRange();
-    const filtered = getServicesByDateRange(start, end);
-
-    renderRanking(filtered);
+function updateReportsCaixa() {
+    const { start, end } = getDateRange(currentRelCaixaPeriod, dateStartInputCaixa, dateEndInputCaixa);
     renderCashHistory(start, end);
+}
+
+function updateReportsServicos() {
+    const { start, end } = getDateRange(currentRelServicosPeriod, dateStartInputServicos, dateEndInputServicos);
+    const filtered = getServicesByDateRange(start, end);
     renderReportHistory(filtered);
 }
 
 function renderCashHistory(start, end) {
     const filteredCash = cashHistory.filter(c => c.date >= start && c.date <= end).sort((a, b) => b.date.localeCompare(a.date));
-    cashHistoryTable.innerHTML = '';
+    if (!cashHistoryBody) return;
+    cashHistoryBody.innerHTML = '';
     
     if (filteredCash.length === 0) {
-        cashHistoryTable.parentElement.style.display = 'none';
-        cashHistoryEmpty.style.display = 'block';
+        if (cashHistoryTable) cashHistoryTable.parentElement.style.display = 'none';
+        if (cashHistoryEmpty) cashHistoryEmpty.style.display = 'block';
         return;
     }
 
-    cashHistoryTable.parentElement.style.display = 'table';
-    cashHistoryEmpty.style.display = 'none';
+    if (cashHistoryTable) cashHistoryTable.parentElement.style.display = 'table';
+    if (cashHistoryEmpty) cashHistoryEmpty.style.display = 'none';
 
     filteredCash.forEach(c => {
         const tr = document.createElement('tr');
@@ -917,7 +1142,7 @@ function renderCashHistory(start, end) {
                 </button>
             </td>
         `;
-        cashHistoryTable.appendChild(tr);
+        cashHistoryBody.appendChild(tr);
     });
 }
 
@@ -927,7 +1152,8 @@ window.deleteCashHistory = function(id) {
         saveCashRegisterToStorage();
         
         // Atualiza a interface
-        updateReports();
+        updateReportsCaixa();
+        updateReportsServicos();
         updateDashboard();
         updateCaixaButton();
         alert('Histórico de caixa excluído!');
@@ -1019,6 +1245,12 @@ function renderReportHistory(servicesList) {
                     <td>${entry.serviceName}</td>
                     <td>${entry.paymentMethod || '--'}</td>
                     <td>R$ ${entry.price.toFixed(2).replace('.', ',')}</td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="btn-icon" onclick="editService(${entry.id})"><i class="fa-solid fa-pen"></i></button>
+                            <button class="btn-icon delete" onclick="deleteService(${entry.id})"><i class="fa-solid fa-trash"></i></button>
+                        </div>
+                    </td>
                 </tr>
             `;
         });
@@ -1036,6 +1268,7 @@ function renderReportHistory(servicesList) {
                         <th>Serviço</th>
                         <th>Pagamento</th>
                         <th>Valor</th>
+                        <th>Ação</th>
                     </tr>
                 </thead>
                 <tbody>${tableRows}</tbody>
@@ -1050,23 +1283,25 @@ function renderReportHistory(servicesList) {
 }
 
 // ---- Aba Configurações (Usuários) ----
-newUserForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const uname = newSystemUsername.value.trim().toLowerCase();
-    const upass = newSystemPassword.value;
-    
-    if (users.find(u => u.username === uname)) {
-        alert('Este usuário já existe!');
-        return;
-    }
-    
-    users.push({ id: Date.now(), username: uname, password: upass });
-    saveUsersToStorage();
-    newSystemUsername.value = '';
-    newSystemPassword.value = '';
-    renderUsersList();
-    alert('Usuário criado com sucesso!');
-});
+if (newUserForm) {
+    newUserForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const uname = newSystemUsername.value.trim().toLowerCase();
+        const upass = newSystemPassword.value;
+        
+        if (users.find(u => u.username === uname)) {
+            alert('Este usuário já existe!');
+            return;
+        }
+        
+        users.push({ id: Date.now(), username: uname, password: upass });
+        saveUsersToStorage();
+        newSystemUsername.value = '';
+        newSystemPassword.value = '';
+        renderUsersList();
+        alert('Usuário criado com sucesso!');
+    });
+}
 
 function deleteUser(id) {
     const userToDelete = users.find(u => u.id === id);
@@ -1082,20 +1317,22 @@ function deleteUser(id) {
     }
 }
 
-changePasswordForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const newPass = changePasswordNew.value;
-    
-    const index = users.findIndex(u => u.username === currentUser.username);
-    if (index !== -1) {
-        users[index].password = newPass;
-        saveUsersToStorage();
-        currentUser.password = newPass;
-        sessionStorage.setItem('barbearia_logged_in', JSON.stringify(currentUser));
-        changePasswordNew.value = '';
-        alert('Senha redefinida com sucesso!');
-    }
-});
+if (changePasswordForm) {
+    changePasswordForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const newPass = changePasswordNew.value;
+        
+        const index = users.findIndex(u => u.username === currentUser.username);
+        if (index !== -1) {
+            users[index].password = newPass;
+            saveUsersToStorage();
+            currentUser.password = newPass;
+            sessionStorage.setItem('barbearia_logged_in', JSON.stringify(currentUser));
+            changePasswordNew.value = '';
+            alert('Senha redefinida com sucesso!');
+        }
+    });
+}
 
 function renderUsersList() {
     usersListContainer.innerHTML = '';
@@ -1123,6 +1360,8 @@ function saveServicesToStorage() { localStorage.setItem('barbearia_ze_services',
 function saveBarbersToStorage() { localStorage.setItem('barbearia_ze_barbers', JSON.stringify(barbers)); }
 function saveUsersToStorage() { localStorage.setItem('barbearia_ze_users', JSON.stringify(users)); }
 function saveCashRegisterToStorage() { localStorage.setItem('barbearia_ze_cash_history', JSON.stringify(cashHistory)); }
+function saveInventoryToStorage() { localStorage.setItem('barbearia_ze_inventory', JSON.stringify(inventory)); }
+function saveProductSalesToStorage() { localStorage.setItem('barbearia_ze_product_sales', JSON.stringify(productSales)); }
 
 function loadFromLocalStorage() {
     const savedServices = localStorage.getItem('barbearia_ze_services');
@@ -1291,18 +1530,26 @@ if (btnClearFinancial) {
         // Limpa arrays
         allServices = [];
         cashHistory = [];
+        allConsumption = [];
+        productSales = [];
 
         // Salva estados vazios
         saveServicesToStorage();
         saveCashRegisterToStorage();
+        localStorage.setItem('barbearia_ze_consumption', JSON.stringify(allConsumption));
+        saveProductSalesToStorage();
 
         // Atualiza Interface
         updateDashboard();
         updateFinanceiro();
-        updateReports();
+        updateReportsCaixa();
+        updateReportsServicos();
         updateCaixaButton();
-
-        alert('Dados financeiros resetados com sucesso! O sistema está limpo para novos testes.');
+        renderConsumoList();
+        renderInventory();
+        populateProductSelect();
+        
+        alert('Todos os dados financeiros, consumos e vendas foram zerados.');
     });
 }
 
@@ -1403,8 +1650,10 @@ function updateCaixaButton() {
 function updateCaixaStatus() {
     const today = getTodayKey();
     const todayCash = cashHistory.find(c => c.date === today);
+    const caixaWarning = document.getElementById('caixa-warning');
     
     if (todayCash) {
+        if (caixaWarning) caixaWarning.style.display = 'none';
         caixaStatus.style.display = 'flex';
         caixaStatusDate.textContent = `Aberto às ${todayCash.openedAt} — ${formatDateBR(todayCash.date)}`;
         caixaStatusObs.textContent = todayCash.observation || '';
@@ -1417,6 +1666,12 @@ function updateCaixaStatus() {
         if (todayCash.status === 'aberto') {
             const todayServices = getTodayServices();
             servicesRevenue = todayServices.reduce((acc, curr) => acc + curr.price, 0);
+            
+            // Add product sales to today's total if any
+            const todaySales = productSales.filter(s => s.date === today);
+            const salesRevenue = todaySales.reduce((acc, curr) => acc + (curr.price * curr.quantity), 0);
+            
+            servicesRevenue += salesRevenue;
             total = opening + servicesRevenue;
             
             caixaBadge.innerHTML = '<i class="fa-solid fa-cash-register"></i> Caixa Aberto';
@@ -1435,7 +1690,176 @@ function updateCaixaStatus() {
         caixaValTotal.textContent = `R$ ${total.toFixed(2).replace('.', ',')}`;
     } else {
         caixaStatus.style.display = 'none';
+        if (caixaWarning) caixaWarning.style.display = 'flex';
     }
+}
+
+// ---- Estoque e Vendas ----
+function setupEstoque() {
+    const productForm = document.getElementById('product-form');
+    const saleForm = document.getElementById('sale-form');
+
+    if (productForm) {
+        productForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const name = document.getElementById('prod-name').value;
+            const price = parseFloat(document.getElementById('prod-price').value);
+            const stock = parseInt(document.getElementById('prod-stock').value);
+
+            const newProduct = { id: Date.now(), name, price, stock };
+            inventory.push(newProduct);
+            saveInventoryToStorage();
+            productForm.reset();
+            renderInventory();
+            populateProductSelect();
+            alert('Produto cadastrado!');
+        });
+    }
+
+    if (saleForm) {
+        saleForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const prodId = parseInt(document.getElementById('sale-product-select').value);
+            const qty = parseInt(document.getElementById('sale-qty').value);
+            const payment = document.getElementById('sale-payment').value;
+
+            const product = inventory.find(p => p.id === prodId);
+            if (!product) return;
+
+            if (product.stock < qty) {
+                alert('Estoque insuficiente!');
+                return;
+            }
+
+            product.stock -= qty;
+            const newSale = {
+                id: Date.now(),
+                productId: prodId,
+                productName: product.name,
+                price: product.price,
+                quantity: qty,
+                paymentMethod: payment,
+                date: getTodayKey()
+            };
+
+            productSales.push(newSale);
+            saveInventoryToStorage();
+            saveProductSalesToStorage();
+            
+            saleForm.reset();
+            renderInventory();
+            updateDashboard();
+            alert('Venda realizada com sucesso!');
+        });
+    }
+}
+
+function renderInventory() {
+    const list = document.getElementById('inventory-list');
+    if (!list) return;
+    list.innerHTML = '';
+
+    inventory.forEach(p => {
+        const tr = document.createElement('tr');
+        const status = p.stock <= 3 ? '<span class="badge badge-low">Baixo</span>' : '<span class="badge badge-ok">Normal</span>';
+        
+        tr.innerHTML = `
+            <td>${p.name}</td>
+            <td>R$ ${p.price.toFixed(2).replace('.', ',')}</td>
+            <td>${p.stock} un</td>
+            <td>${status}</td>
+            <td>
+                <button class="btn-icon delete" onclick="deleteProduct(${p.id})"><i class="fa-solid fa-trash"></i></button>
+            </td>
+        `;
+        list.appendChild(tr);
+    });
+}
+
+function populateProductSelect() {
+    const select = document.getElementById('sale-product-select');
+    const consumoSelect = document.getElementById('consumo-product-select');
+    
+    const options = inventory.map(p => `<option value="${p.id}">${p.name} (Estoque: ${p.stock})</option>`).join('');
+    const defaultOption = '<option value="" disabled selected>Selecione o produto</option>';
+
+    if (select) select.innerHTML = defaultOption + options;
+    if (consumoSelect) consumoSelect.innerHTML = defaultOption + options;
+}
+
+window.deleteProduct = function(id) {
+    if (confirm('Remover produto do estoque?')) {
+        inventory = inventory.filter(p => p.id !== id);
+        saveInventoryToStorage();
+        renderInventory();
+        populateProductSelect();
+    }
+};
+
+// ---- Gráficos ----
+function renderDashboardChart() {
+    const ctx = document.getElementById('mainDashboardChart');
+    if (!ctx) return;
+
+    // Destroy existing chart if any
+    if (dashboardChart) {
+        dashboardChart.destroy();
+    }
+
+    // Get last 7 days labels
+    const labels = [];
+    const revenueData = [];
+    
+    for (let i = 6; i >= 0; i--) {
+        const date = getDateNDaysAgo(i);
+        const dayLabel = i === 0 ? 'Hoje' : formatDateBR(date).split('/')[0] + '/' + formatDateBR(date).split('/')[1];
+        labels.push(dayLabel);
+        
+        // Calculate revenue for this day (Services + Product Sales)
+        const dayServices = allServices.filter(s => s.date === date);
+        const servicesRev = dayServices.reduce((acc, curr) => acc + curr.price, 0);
+        
+        const daySales = productSales.filter(s => s.date === date);
+        const salesRev = daySales.reduce((acc, curr) => acc + (curr.price * curr.quantity), 0);
+        
+        revenueData.push(servicesRev + salesRev);
+    }
+
+    dashboardChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Faturamento Total (R$)',
+                data: revenueData,
+                borderColor: '#DAA520',
+                backgroundColor: 'rgba(218, 165, 32, 0.1)',
+                borderWidth: 3,
+                tension: 0.4,
+                fill: true,
+                pointBackgroundColor: '#DAA520',
+                pointRadius: 5
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    ticks: { color: '#a0a0a0' }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: { color: '#a0a0a0' }
+                }
+            }
+        }
+    });
 }
 
 // Iniciar

@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "exportedAt": "2026-04-23T14:18:12.550Z",
+  "services": [
+    {
+      "id": 1776952270027,
+      "barber": "Marcos",
+      "serviceName": "Combo (Corte + Barba)",
+      "price": 70,
+      "time": "10:00",
+      "paymentMethod": "Débito",
+      "date": "2026-04-23"
+    },
+    {
+      "id": 1776951809879,
+      "barber": "João",
+      "serviceName": "Corte Social",
+      "price": 35,
+      "time": "08:00",
+      "paymentMethod": "PIX",
+      "date": "2026-04-23"
+    }
+  ],
+  "barbers": [
+    {
+      "id": 1,
+      "name": "João"
+    },
+    {
+      "id": 2,
+      "name": "Marcos"
+    },
+    {
+      "id": 3,
+      "name": "Pedro"
+    },
+    {
+      "id": 1776883418135,
+      "name": "Henrique"
+    },
+    {
+      "id": 1776883426135,
+      "name": "Guilherme"
+    }
+  ],
+  "users": [
+    {
+      "id": 1,
+      "username": "guilherme",
+      "password": "123"
+    },
+    {
+      "id": 1776867891629,
+      "username": "henrique",
+      "password": "4057"
+    }
+  ],
+  "cashHistory": [
+    {
+      "id": 1776951767282,
+      "date": "2026-04-23",
+      "openingValue": 0,
+      "observation": "",
+      "openedAt": "10:42",
+      "status": "aberto"
+    }
+  ]
+}

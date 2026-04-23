@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
 <body>
@@ -46,13 +47,22 @@
                 <ul>
                     <li class="active" id="nav-dashboard"><a href="#"><i class="fa-solid fa-chart-line"></i> Dashboard
                             do Dia</a></li>
-                    <li id="nav-barbeiros"><a href="#"><i class="fa-solid fa-users"></i> Barbeiros</a></li>
                     <li id="nav-financeiro"><a href="#"><i class="fa-solid fa-money-bill-trend-up"></i> Financeiro</a>
                     </li>
                     <li id="nav-comissoes"><a href="#"><i class="fa-solid fa-hand-holding-dollar"></i> Comissões</a>
                     </li>
                     <li id="nav-consumo"><a href="#"><i class="fa-solid fa-cart-shopping"></i> Consumo</a></li>
-                    <li id="nav-relatorios"><a href="#"><i class="fa-solid fa-chart-bar"></i> Relatórios</a></li>
+                    <li id="nav-estoque"><a href="#"><i class="fa-solid fa-boxes-stacked"></i> Estoque</a></li>
+                    <li class="has-submenu" id="nav-relatorios-parent">
+                        <a href="#" class="submenu-toggle">
+                            <i class="fa-solid fa-chart-bar"></i> Relatórios
+                            <i class="fa-solid fa-chevron-down submenu-icon"></i>
+                        </a>
+                        <ul class="submenu">
+                            <li id="nav-rel-caixa"><a href="#"><i class="fa-solid fa-cash-register"></i> Histórico de Caixa</a></li>
+                            <li id="nav-rel-servicos"><a href="#"><i class="fa-solid fa-list-check"></i> Histórico de Serviços</a></li>
+                        </ul>
+                    </li>
                     <li id="nav-config"><a href="#"><i class="fa-solid fa-gear"></i> Configurações</a></li>
                 </ul>
             </nav>
@@ -103,6 +113,15 @@
 
             <!-- View: Dashboard -->
             <div id="view-dashboard">
+                <!-- Alerta Caixa Fechado -->
+                <div class="caixa-warning glass" id="caixa-warning" style="display: none;">
+                    <div class="warning-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                    <div class="warning-text">
+                        <h4>Atenção: O caixa do dia ainda não foi aberto!</h4>
+                        <p>Clique no botão "Abrir Caixa" para iniciar o expediente e registrar serviços.</p>
+                    </div>
+                </div>
+
                 <!-- Card Caixa (visível só quando aberto) -->
                 <div class="caixa-status-card glass" id="caixa-status" style="display: none;">
                     <div class="caixa-status-left">
@@ -191,6 +210,16 @@
                             </table>
                         </div>
                     </section>
+                </div>
+
+                <!-- Container do Gráfico (Movido para baixo) -->
+                <div class="chart-container-main glass" id="dashboard-chart-container" style="margin-top: 30px;">
+                    <div class="chart-header">
+                        <h3><i class="fa-solid fa-chart-line"></i> Desempenho (Últimos 7 dias)</h3>
+                    </div>
+                    <div class="canvas-wrapper" style="height: 300px;">
+                        <canvas id="mainDashboardChart"></canvas>
+                    </div>
                 </div>
             </div>
 
@@ -343,7 +372,7 @@
 
                 <div class="content-grid">
                     <section class="register-section glass">
-                        <h3>Lançar Novo Consumo</h3>
+                        <h3>Registrar Novo Consumo</h3>
                         <form id="consumo-form">
                             <div class="form-group">
                                 <label for="consumo-barber-select">Barbeiro</label>
@@ -354,13 +383,7 @@
                             <div class="form-group">
                                 <label for="consumo-product-select">Produto</label>
                                 <select id="consumo-product-select" required>
-                                    <option value="" disabled selected>Selecione o produto</option>
-                                    <option value="Coca-Cola 350ml" data-price="6.00">Coca-Cola 350ml (R$ 6,00)</option>
-                                    <option value="Coca-Cola 200ml" data-price="4.00">Coca-Cola 200ml (R$ 4,00)</option>
-                                    <option value="Monster 473ml" data-price="12.00">Energetico Monster 473ml (R$ 12,00)
-                                    </option>
-                                    <option value="Baly 473ml" data-price="8.00">Energetico Baly 473ml (R$ 8,00)
-                                    </option>
+                                    <option value="" disabled selected>Carregando produtos...</option>
                                 </select>
                             </div>
                             <div class="form-group">
@@ -384,31 +407,87 @@
                 </div>
             </div>
 
-            <!-- View: Barbeiros -->
-            <div id="view-barbeiros" style="display: none;">
+            <!-- View: Estoque e Vendas -->
+            <div id="view-estoque" style="display: none;">
                 <div class="content-grid">
                     <section class="register-section glass">
-                        <h3>Cadastrar Novo Barbeiro</h3>
-                        <form id="barber-form">
+                        <h3>Cadastrar Produto</h3>
+                        <form id="product-form">
                             <div class="form-group">
-                                <label for="new-barber-name">Nome do Barbeiro</label>
-                                <input type="text" id="new-barber-name" required placeholder="Ex: Lucas">
+                                <label for="prod-name">Nome do Produto</label>
+                                <input type="text" id="prod-name" required placeholder="Ex: Pomada Efeito Matte">
                             </div>
-                            <button type="submit" class="btn-primary">Cadastrar</button>
+                            <div class="form-group">
+                                <label for="prod-price">Preço de Venda (R$)</label>
+                                <input type="number" id="prod-price" step="0.01" required placeholder="0,00">
+                            </div>
+                            <div class="form-group">
+                                <label for="prod-stock">Qtd. Inicial em Estoque</label>
+                                <input type="number" id="prod-stock" required placeholder="0">
+                            </div>
+                            <button type="submit" class="btn-primary">Adicionar ao Estoque</button>
+                        </form>
+
+                        <hr style="margin: 30px 0; border: 0; border-top: 1px solid var(--border-color);">
+
+                        <h3>Registrar Venda</h3>
+                        <form id="sale-form">
+                            <div class="form-group">
+                                <label for="sale-product-select">Produto</label>
+                                <select id="sale-product-select" required>
+                                    <option value="" disabled selected>Selecione o produto</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="sale-qty">Quantidade</label>
+                                <input type="number" id="sale-qty" value="1" min="1" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="sale-payment">Pagamento</label>
+                                <select id="sale-payment" required>
+                                    <option value="Dinheiro">Dinheiro</option>
+                                    <option value="PIX">PIX</option>
+                                    <option value="Cartão">Cartão</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="btn-success" style="width: 100%;"><i
+                                    class="fa-solid fa-cart-plus"></i> Finalizar Venda</button>
                         </form>
                     </section>
 
                     <section class="history-section glass">
-                        <h3>Equipe Atual e Faturamento</h3>
-                        <div class="barbers-list" id="barbers-list-container">
-                            <!-- Preenchido via JS -->
+                        <h3>Inventário</h3>
+                        <div class="table-responsive">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Produto</th>
+                                        <th>Preço</th>
+                                        <th>Estoque</th>
+                                        <th>Status</th>
+                                        <th>Ação</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="inventory-list">
+                                    <!-- Preenchido via JS -->
+                                </tbody>
+                            </table>
                         </div>
                     </section>
                 </div>
             </div>
 
+
             <!-- View: Relatórios -->
-            <div id="view-relatorios" style="display: none;">
+            <!-- View: Histórico de Caixa -->
+            <div id="view-rel-caixa" style="display: none;">
+                <div class="header-actions" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2 class="view-title">Histórico de Caixa</h2>
+                    <button class="btn-primary" onclick="window.print()" style="width: auto; padding: 10px 20px;">
+                        <i class="fa-solid fa-file-pdf"></i> Gerar PDF
+                    </button>
+                </div>
+
                 <div class="report-filters glass">
                     <div class="filter-chips">
                         <button class="chip active" data-period="today">Hoje</button>
@@ -417,28 +496,22 @@
                         <button class="chip" data-period="month">Mês Atual</button>
                         <button class="chip" data-period="custom">Personalizado</button>
                     </div>
-                    <div class="custom-date-range" id="custom-date-range" style="display: none;">
+                    <div class="custom-date-range" id="custom-date-range-caixa" style="display: none;">
                         <div class="date-input-group">
-                            <label for="date-start">De</label>
-                            <input type="date" id="date-start">
+                            <label>De</label>
+                            <input type="date" id="date-start-caixa">
                         </div>
                         <div class="date-input-group">
-                            <label for="date-end">Até</label>
-                            <input type="date" id="date-end">
+                            <label>Até</label>
+                            <input type="date" id="date-end-caixa">
                         </div>
-                        <button class="btn-primary btn-filter" id="btn-apply-filter">Filtrar</button>
+                        <button class="btn-primary btn-filter" id="btn-apply-filter-caixa">Filtrar</button>
                     </div>
                 </div>
 
-
-
-                <div class="content-grid">
-                    <section class="register-section glass">
-                        <h3>Ranking por Barbeiro</h3>
-                        <div id="ranking-container"></div>
-                    </section>
+                <div class="content-grid" style="grid-template-columns: 1fr;">
                     <section class="history-section glass">
-                        <h3>Histórico de Caixa</h3>
+                        <h3>Registros de Caixa</h3>
                         <div class="table-responsive">
                             <table id="cash-history-table">
                                 <thead>
@@ -462,10 +535,41 @@
                         </div>
                     </section>
                 </div>
+            </div>
 
-                <div class="content-grid" style="margin-top: 30px;">
-                    <section class="history-section glass" style="grid-column: 1 / -1;">
-                        <h3>Histórico Detalhado de Serviços</h3>
+            <!-- View: Histórico de Serviços -->
+            <div id="view-rel-servicos" style="display: none;">
+                <div class="header-actions" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2 class="view-title">Histórico de Serviços</h2>
+                    <button class="btn-primary" onclick="window.print()" style="width: auto; padding: 10px 20px;">
+                        <i class="fa-solid fa-file-pdf"></i> Gerar PDF
+                    </button>
+                </div>
+
+                <div class="report-filters glass">
+                    <div class="filter-chips">
+                        <button class="chip active" data-period="today">Hoje</button>
+                        <button class="chip" data-period="7days">Últimos 7 dias</button>
+                        <button class="chip" data-period="30days">Últimos 30 dias</button>
+                        <button class="chip" data-period="month">Mês Atual</button>
+                        <button class="chip" data-period="custom">Personalizado</button>
+                    </div>
+                    <div class="custom-date-range" id="custom-date-range-servicos" style="display: none;">
+                        <div class="date-input-group">
+                            <label>De</label>
+                            <input type="date" id="date-start-servicos">
+                        </div>
+                        <div class="date-input-group">
+                            <label>Até</label>
+                            <input type="date" id="date-end-servicos">
+                        </div>
+                        <button class="btn-primary btn-filter" id="btn-apply-filter-servicos">Filtrar</button>
+                    </div>
+                </div>
+
+                <div class="content-grid" style="grid-template-columns: 1fr;">
+                    <section class="history-section glass">
+                        <h3>Detalhamento dos Serviços</h3>
                         <div id="report-history-container"></div>
                     </section>
                 </div>
@@ -474,8 +578,27 @@
             <!-- View: Configurações -->
             <div id="view-configuracoes" style="display: none;">
                 <div class="content-grid">
-                    <!-- Gerenciar Usuários do Sistema -->
+                    <!-- Gerenciar Barbeiros (Movido para cá) -->
                     <section class="register-section glass">
+                        <h3>Cadastrar Novo Barbeiro</h3>
+                        <form id="barber-form">
+                            <div class="form-group">
+                                <label for="new-barber-name">Nome do Barbeiro</label>
+                                <input type="text" id="new-barber-name" required placeholder="Ex: Lucas">
+                            </div>
+                            <button type="submit" class="btn-primary">Cadastrar</button>
+                        </form>
+
+                        <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 30px 0;">
+
+                        <h3>Equipe Atual</h3>
+                        <div class="barbers-list" id="barbers-list-container">
+                            <!-- Preenchido via JS -->
+                        </div>
+                    </section>
+
+                    <!-- Gerenciar Usuários do Sistema -->
+                    <section class="history-section glass">
                         <h3>Criar Novo Usuário</h3>
                         <form id="new-user-form">
                             <div class="form-group">
@@ -541,6 +664,49 @@
 
         </main>
     </div>
+    <!-- Modal Editar Serviço -->
+    <div class="modal-overlay" id="modal-edit-service" style="display: none;">
+        <div class="modal-box glass">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-pen-to-square"></i> Editar Serviço</h3>
+                <button class="modal-close" id="modal-edit-close">&times;</button>
+            </div>
+            <form id="edit-service-form">
+                <input type="hidden" id="edit-service-id">
+                <div class="form-group">
+                    <label for="edit-barber-select">Barbeiro</label>
+                    <select id="edit-barber-select" required></select>
+                </div>
+                <div class="form-group">
+                    <label for="edit-service-select">Serviço</label>
+                    <select id="edit-service-select" required></select>
+                </div>
+                <div class="form-group">
+                    <label for="edit-time-input">Horário</label>
+                    <input type="time" id="edit-time-input" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit-price-input">Valor (R$)</label>
+                    <input type="number" id="edit-price-input" step="0.01" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit-payment-method">Forma de Pagamento</label>
+                    <select id="edit-payment-method" required>
+                        <option value="Dinheiro">Dinheiro</option>
+                        <option value="PIX">PIX</option>
+                        <option value="Débito">Débito</option>
+                        <option value="Crédito">Crédito</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="edit-date-input">Data</label>
+                    <input type="date" id="edit-date-input" required>
+                </div>
+                <button type="submit" class="btn-primary">Salvar Alterações</button>
+            </form>
+        </div>
+    </div>
+
     <script src="script.js"></script>
 </body>
 
