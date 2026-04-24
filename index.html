@@ -47,10 +47,34 @@
                 <ul>
                     <li class="active" id="nav-dashboard"><a href="#"><i class="fa-solid fa-chart-line"></i> Dashboard
                             do Dia</a></li>
+                    <li id="nav-estoque"><a href="#"><i class="fa-solid fa-boxes-stacked"></i> Estoque</a></li>
                     <li id="nav-financeiro"><a href="#"><i class="fa-solid fa-money-bill-trend-up"></i> Financeiro</a>
                     </li>
+                    <li class="has-submenu" id="nav-gestao-parent">
+                        <a href="#" class="submenu-toggle" onclick="this.closest('.has-submenu').classList.toggle('open'); return false;">
+                            <i class="fa-solid fa-screwdriver-wrench"></i> Gestão
+                            <i class="fa-solid fa-chevron-down submenu-icon"></i>
+                        </a>
+                        <ul class="submenu">
+                            <li id="nav-gestao-barbeiros"><a href="#"><i class="fa-solid fa-users"></i> Barbeiros</a></li>
+                            <li id="nav-gestao-servicos"><a href="#"><i class="fa-solid fa-scissors"></i> Serviços</a></li>
+                            <li id="nav-gestao-usuarios"><a href="#"><i class="fa-solid fa-user-shield"></i> Usuários</a></li>
+                        </ul>
+                    </li>
+                    <li class="has-submenu" id="nav-relatorios-parent">
+                        <a href="#" class="submenu-toggle" onclick="this.closest('.has-submenu').classList.toggle('open'); return false;">
+                            <i class="fa-solid fa-chart-bar"></i> Relatórios
+                            <i class="fa-solid fa-chevron-down submenu-icon"></i>
+                        </a>
+                        <ul class="submenu">
+                            <li id="nav-rel-caixa"><a href="#"><i class="fa-solid fa-cash-register"></i> Histórico de Caixa</a></li>
+                            <li id="nav-rel-servicos"><a href="#"><i class="fa-solid fa-list-check"></i> Histórico de Serviços</a></li>
+                            <li id="nav-rel-desempenho"><a href="#"><i class="fa-solid fa-chart-line"></i> Relatório de Desempenho</a></li>
+                            <li id="nav-rel-faturamento"><a href="#"><i class="fa-solid fa-money-bill-trend-up"></i> Relatório de Faturamento</a></li>
+                        </ul>
+                    </li>
                     <li class="has-submenu" id="nav-vendas-parent">
-                        <a href="#" class="submenu-toggle">
+                        <a href="#" class="submenu-toggle" onclick="this.closest('.has-submenu').classList.toggle('open'); return false;">
                             <i class="fa-solid fa-cart-shopping"></i> Vendas
                             <i class="fa-solid fa-chevron-down submenu-icon"></i>
                         </a>
@@ -61,36 +85,15 @@
                             <li id="nav-vendas"><a href="#"><i class="fa-solid fa-box-open"></i> Venda de Produtos</a></li>
                         </ul>
                     </li>
-                    <li id="nav-estoque"><a href="#"><i class="fa-solid fa-boxes-stacked"></i> Estoque</a></li>
-                    <li class="has-submenu" id="nav-relatorios-parent">
-                        <a href="#" class="submenu-toggle">
-                            <i class="fa-solid fa-chart-bar"></i> Relatórios
-                            <i class="fa-solid fa-chevron-down submenu-icon"></i>
-                        </a>
-                        <ul class="submenu">
-                            <li id="nav-rel-caixa"><a href="#"><i class="fa-solid fa-cash-register"></i> Histórico de Caixa</a></li>
-                            <li id="nav-rel-servicos"><a href="#"><i class="fa-solid fa-list-check"></i> Histórico de Serviços</a></li>
-                        </ul>
-                    </li>
-                    <li class="has-submenu" id="nav-gestao-parent">
-                        <a href="#" class="submenu-toggle">
-                            <i class="fa-solid fa-screwdriver-wrench"></i> Gestão
-                            <i class="fa-solid fa-chevron-down submenu-icon"></i>
-                        </a>
-                        <ul class="submenu">
-                            <li id="nav-gestao-barbeiros"><a href="#"><i class="fa-solid fa-users"></i> Barbeiros</a></li>
-                            <li id="nav-gestao-servicos"><a href="#"><i class="fa-solid fa-scissors"></i> Serviços</a></li>
-                            <li id="nav-gestao-usuarios"><a href="#"><i class="fa-solid fa-user-shield"></i> Usuários</a></li>
-                        </ul>
-                    </li>
-                    <li id="nav-config"><a href="#"><i class="fa-solid fa-gear"></i> Configurações</a></li>
                 </ul>
             </nav>
             <div class="user-info">
                 <div class="avatar" id="current-user-avatar">G</div>
                 <span id="current-user-name">Guilherme</span>
-                <button id="btn-logout" title="Sair" class="btn-logout"><i
-                        class="fa-solid fa-right-from-bracket"></i></button>
+                <div class="user-actions">
+                    <button id="nav-config" title="Configurações" class="btn-config"><i class="fa-solid fa-gear"></i></button>
+                    <button id="btn-logout" title="Sair" class="btn-logout"><i class="fa-solid fa-right-from-bracket"></i></button>
+                </div>
             </div>
         </header>
 
@@ -128,9 +131,9 @@
         <main class="main-content">
             <header class="top-bar">
                 <h2 id="page-title">Resumo de Hoje</h2>
-                <div class="date-time-wrapper" style="display: flex; gap: 15px; align-items: center;">
+                <div class="date-time-wrapper">
                     <div class="date-display" id="current-date">--/--/----</div>
-                    <div class="time-display" id="current-time" style="font-size: 1.1rem; font-weight: 600; color: #D4AF37;">--:--:--</div>
+                    <div class="time-display" id="current-time">--:--:--</div>
                 </div>
             </header>
 
@@ -243,15 +246,6 @@
                     </section>
                 </div>
 
-                <!-- Container do Gráfico (Movido para baixo) -->
-                <div class="chart-container-main glass" id="dashboard-chart-container" style="margin-top: 30px;">
-                    <div class="chart-header">
-                        <h3><i class="fa-solid fa-chart-line"></i> Desempenho (Últimos 7 dias)</h3>
-                    </div>
-                    <div class="canvas-wrapper" style="height: 300px;">
-                        <canvas id="mainDashboardChart"></canvas>
-                    </div>
-                </div>
             </div>
 
             <!-- View: Financeiro -->
@@ -686,7 +680,140 @@
                 </div>
             </div>
 
-            <!-- View: Gestão Barbeiros -->
+            <!-- View: Relatório de Desempenho -->
+            <div id="view-rel-desempenho" style="display: none;">
+                <div class="header-actions" style="margin-bottom: 20px;">
+                    <h2 class="view-title">Relatório de Desempenho</h2>
+                </div>
+
+                <div class="report-filters glass">
+                    <div class="filter-chips">
+                        <button class="chip active" data-perf-period="7days">Últimos 7 dias</button>
+                        <button class="chip" data-perf-period="30days">Últimos 30 dias</button>
+                        <button class="chip" data-perf-period="month">Mês Atual</button>
+                        <button class="chip" data-perf-period="lastMonth">Mês Passado</button>
+                        <button class="chip" data-perf-period="custom">Personalizado</button>
+                    </div>
+                    <div class="custom-date-range" id="perf-custom-date-range" style="display: none;">
+                        <div class="date-input-group">
+                            <label>De</label>
+                            <input type="date" id="perf-date-start">
+                        </div>
+                        <div class="date-input-group">
+                            <label>Até</label>
+                            <input type="date" id="perf-date-end">
+                        </div>
+                        <button class="btn-primary btn-filter" id="perf-btn-apply-filter">Filtrar</button>
+                    </div>
+                </div>
+
+                <div class="chart-container-main card" style="height: 500px; margin-bottom: 30px; padding: 25px; overflow-x: auto; overflow-y: hidden;">
+                    <div class="canvas-wrapper" id="perf-canvas-wrapper" style="height: 100%; width: 100%; position: relative;">
+                        <canvas id="performanceReportChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="summary-cards">
+                    <div class="card">
+                        <div class="card-icon"><i class="fa-solid fa-money-bill-wave"></i></div>
+                        <div class="card-info">
+                            <h3>Faturamento Total</h3>
+                            <p id="perf-total-revenue">R$ 0,00</p>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-icon"><i class="fa-solid fa-scissors"></i></div>
+                        <div class="card-info">
+                            <h3>Serviços Realizados</h3>
+                            <p id="perf-total-services">0</p>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-icon"><i class="fa-solid fa-box-open"></i></div>
+                        <div class="card-info">
+                            <h3>Venda de Produtos</h3>
+                            <p id="perf-total-products">R$ 0,00</p>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-icon"><i class="fa-solid fa-hand-holding-dollar"></i></div>
+                        <div class="card-info">
+                            <h3>Ticket Médio</h3>
+                            <p id="perf-avg-ticket">R$ 0,00</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- View: Relatório de Faturamento -->
+            <div id="view-rel-faturamento" style="display: none;">
+                <div class="header-actions"
+                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2 class="view-title">Relatório de Faturamento</h2>
+                    <button class="btn-primary" onclick="window.print()" style="width: auto; padding: 10px 20px;">
+                        <i class="fa-solid fa-file-pdf"></i> Gerar PDF
+                    </button>
+                </div>
+
+                <div class="report-filters glass">
+                    <div class="filter-group" style="margin-bottom: 15px;">
+                        <label>Tipo de Faturamento:</label>
+                        <div class="filter-chips">
+                            <button class="chip active" data-fat-type="total">Total</button>
+                            <button class="chip" data-fat-type="servicos">Apenas Serviços</button>
+                            <button class="chip" data-fat-type="vendas">Apenas Vendas</button>
+                        </div>
+                    </div>
+                    <div class="filter-group">
+                        <label>Período:</label>
+                        <div class="filter-chips">
+                            <button class="chip active" data-fat-period="today">Hoje</button>
+                            <button class="chip" data-fat-period="7days">Últimos 7 dias</button>
+                            <button class="chip" data-fat-period="30days">Últimos 30 dias</button>
+                            <button class="chip" data-fat-period="month">Mês Atual</button>
+                            <button class="chip" data-fat-period="custom">Personalizado</button>
+                        </div>
+                    </div>
+                    <div class="custom-date-range" id="fat-custom-date-range" style="display: none; margin-top: 15px;">
+                        <div class="date-input-group">
+                            <label>De</label>
+                            <input type="date" id="fat-date-start">
+                        </div>
+                        <div class="date-input-group">
+                            <label>Até</label>
+                            <input type="date" id="fat-date-end">
+                        </div>
+                        <button class="btn-primary btn-filter" id="fat-btn-apply-filter">Filtrar</button>
+                    </div>
+                </div>
+
+                <div class="content-grid" style="grid-template-columns: 1fr;">
+                    <section class="history-section glass">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <h3>Detalhamento Financeiro</h3>
+                            <div style="font-weight: 700; font-size: 1.2rem; color: var(--primary-color);">
+                                TOTAL: <span id="fat-total-display">R$ 0,00</span>
+                            </div>
+                        </div>
+                        <div class="table-responsive">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Data</th>
+                                        <th>Tipo</th>
+                                        <th>Descrição</th>
+                                        <th>Pagamento</th>
+                                        <th>Valor</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="fat-history-body">
+                                    <!-- Preenchido via JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+            </div>
             <div id="view-gestao-barbeiros" style="display: none;">
                 <div class="management-view">
                     <div class="management-grid">
@@ -743,26 +870,19 @@
                                     <label for="new-system-password">Senha</label>
                                     <input type="password" id="new-system-password" required>
                                 </div>
+                                <div class="form-group">
+                                    <label for="new-system-password-confirm">Confirmar Senha</label>
+                                    <input type="password" id="new-system-password-confirm" required>
+                                </div>
                                 <button type="submit" class="btn-primary">Adicionar Acesso</button>
                             </form>
                         </section>
 
                         <section class="history-section glass">
-                            <h3>Usuários com Acesso</h3>
+                            <h3><i class="fa-solid fa-users"></i> Usuários com Acesso</h3>
                             <div class="barbers-list" id="users-list-container">
                                 <!-- Preenchido via JS -->
                             </div>
-
-                            <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 30px 0;">
-
-                            <h3>Redefinir Minha Senha</h3>
-                            <form id="change-password-form">
-                                <div class="form-group">
-                                    <label for="change-password-new">Nova Senha</label>
-                                    <input type="password" id="change-password-new" required>
-                                </div>
-                                <button type="submit" class="btn-primary">Atualizar Senha</button>
-                            </form>
                         </section>
                     </div>
                 </div>
@@ -859,6 +979,77 @@
                     <input type="date" id="edit-date-input" required>
                 </div>
                 <button type="submit" class="btn-primary">Salvar Alterações</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Editar Configuração de Barbeiro -->
+    <div class="modal-overlay" id="modal-edit-config-barber" style="display: none;">
+        <div class="modal-box glass" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3 style="color: var(--primary-color);"><i class="fa-solid fa-pen-to-square"></i> Editar Barbeiro</h3>
+                <button class="modal-close" onclick="document.getElementById('modal-edit-config-barber').style.display='none'">&times;</button>
+            </div>
+            <form id="form-edit-config-barber">
+                <input type="hidden" id="edit-config-barber-id">
+                <div class="form-group">
+                    <label>Nome do Barbeiro</label>
+                    <input type="text" id="edit-config-barber-name" required>
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button type="button" style="flex: 1; padding: 12px; background: rgba(255,255,255,0.1); border: 1px solid var(--border-color); border-radius: 8px; color: white; cursor: pointer; transition: all 0.3s ease;" onmouseover="this.style.background='rgba(255,255,255,0.2)'" onmouseout="this.style.background='rgba(255,255,255,0.1)'" onclick="document.getElementById('modal-edit-config-barber').style.display='none'">Cancelar</button>
+                    <button type="submit" class="btn-primary" style="flex: 1;">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Editar Configuração de Serviço -->
+    <div class="modal-overlay" id="modal-edit-config-service" style="display: none;">
+        <div class="modal-box glass" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3 style="color: var(--primary-color);"><i class="fa-solid fa-pen-to-square"></i> Editar Serviço</h3>
+                <button class="modal-close" onclick="document.getElementById('modal-edit-config-service').style.display='none'">&times;</button>
+            </div>
+            <form id="form-edit-config-service">
+                <input type="hidden" id="edit-config-service-id">
+                <div class="form-group">
+                    <label>Nome do Serviço</label>
+                    <input type="text" id="edit-config-service-name" required>
+                </div>
+                <div class="form-group">
+                    <label>Valor Padrão (R$)</label>
+                    <input type="number" id="edit-config-service-price" step="0.01" required>
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button type="button" style="flex: 1; padding: 12px; background: rgba(255,255,255,0.1); border: 1px solid var(--border-color); border-radius: 8px; color: white; cursor: pointer; transition: all 0.3s ease;" onmouseover="this.style.background='rgba(255,255,255,0.2)'" onmouseout="this.style.background='rgba(255,255,255,0.1)'" onclick="document.getElementById('modal-edit-config-service').style.display='none'">Cancelar</button>
+                    <button type="submit" class="btn-primary" style="flex: 1;">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Editar Usuário -->
+    <div class="modal-overlay" id="modal-edit-user" style="display: none;">
+        <div class="modal-box glass" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3 style="color: var(--primary-color);"><i class="fa-solid fa-user-pen"></i> Editar Usuário</h3>
+                <button class="modal-close" onclick="document.getElementById('modal-edit-user').style.display='none'">&times;</button>
+            </div>
+            <form id="form-edit-user">
+                <input type="hidden" id="edit-user-id">
+                <div class="form-group">
+                    <label>Nome de Usuário</label>
+                    <input type="text" id="edit-user-username" required>
+                </div>
+                <div class="form-group">
+                    <label>Nova Senha (deixe em branco para manter a atual)</label>
+                    <input type="password" id="edit-user-password">
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button type="button" style="flex: 1; padding: 12px; background: rgba(255,255,255,0.1); border: 1px solid var(--border-color); border-radius: 8px; color: white; cursor: pointer; transition: all 0.3s ease;" onmouseover="this.style.background='rgba(255,255,255,0.2)'" onmouseout="this.style.background='rgba(255,255,255,0.1)'" onclick="document.getElementById('modal-edit-user').style.display='none'">Cancelar</button>
+                    <button type="submit" class="btn-primary" style="flex: 1;">Salvar</button>
+                </div>
             </form>
         </div>
     </div>
