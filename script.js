@@ -38,7 +38,11 @@ let allConsumption = JSON.parse(localStorage.getItem('barbearia_ze_consumption')
 let inventory = JSON.parse(localStorage.getItem('barbearia_ze_inventory')) || [];
 let productSales = JSON.parse(localStorage.getItem('barbearia_ze_product_sales')) || [];
 let currentVendasPeriod = 'today';
+let currentPerfPeriod = '7days';
+let currentFatPeriod = 'today';
+let currentFatType = 'total';
 let dashboardChart = null;
+let performanceReportChart = null;
 let selectedServicesForNewEntry = [];
 
 // ---- Helpers de Data ----
@@ -111,6 +115,8 @@ const navRelServicos = document.getElementById('nav-rel-servicos');
 const navGestaoBarbeiros = document.getElementById('nav-gestao-barbeiros');
 const navGestaoServicos = document.getElementById('nav-gestao-servicos');
 const navGestaoUsuarios = document.getElementById('nav-gestao-usuarios');
+const navRelDesempenho = document.getElementById('nav-rel-desempenho');
+const navRelFaturamento = document.getElementById('nav-rel-faturamento');
 
 const navRelatoriosParent = document.getElementById('nav-relatorios-parent');
 const navVendasParent = document.getElementById('nav-vendas-parent');
@@ -124,6 +130,8 @@ const viewRelServicos = document.getElementById('view-rel-servicos');
 const viewGestaoBarbeiros = document.getElementById('view-gestao-barbeiros');
 const viewGestaoServicos = document.getElementById('view-gestao-servicos');
 const viewGestaoUsuarios = document.getElementById('view-gestao-usuarios');
+const viewRelDesempenho = document.getElementById('view-rel-desempenho');
+const viewRelFaturamento = document.getElementById('view-rel-faturamento');
 const navEstoque = document.getElementById('nav-estoque');
 const viewEstoque = document.getElementById('view-estoque');
 const navVendas = document.getElementById('nav-vendas');
@@ -284,7 +292,8 @@ function showApp() {
     setupVendas();
     setupMultiService();
     setupConfigServices();
-    renderDashboardChart();
+    setupPerformanceFilters();
+    setupFaturamentoFilters();
 }
 
 
@@ -351,26 +360,15 @@ function setupNavigation() {
     if (navVendas) navVendas.addEventListener('click', (e) => { e.preventDefault(); switchView('vendas'); });
     if (navEstoque) navEstoque.addEventListener('click', (e) => { e.preventDefault(); switchView('estoque'); });
     
-    // Submenu Toggles
-    document.querySelectorAll('.submenu-toggle').forEach(toggle => {
-        toggle.addEventListener('click', (e) => {
-            e.preventDefault();
-            const parent = toggle.closest('.has-submenu');
-            if (parent) {
-                // Fecha outros submenus se quiser (opcional)
-                // document.querySelectorAll('.has-submenu').forEach(other => {
-                //     if(other !== parent) other.classList.remove('open');
-                // });
-                parent.classList.toggle('open');
-            }
-        });
-    });
+    // Submenu Toggles (Now handled by inline onclick in HTML)
 
     if (navRelCaixa) navRelCaixa.addEventListener('click', (e) => { e.preventDefault(); switchView('rel-caixa'); });
     if (navRelServicos) navRelServicos.addEventListener('click', (e) => { e.preventDefault(); switchView('rel-servicos'); });
     if (navGestaoBarbeiros) navGestaoBarbeiros.addEventListener('click', (e) => { e.preventDefault(); switchView('gestao-barbeiros'); });
     if (navGestaoServicos) navGestaoServicos.addEventListener('click', (e) => { e.preventDefault(); switchView('gestao-servicos'); });
     if (navGestaoUsuarios) navGestaoUsuarios.addEventListener('click', (e) => { e.preventDefault(); switchView('gestao-usuarios'); });
+    if (navRelDesempenho) navRelDesempenho.addEventListener('click', (e) => { e.preventDefault(); switchView('rel-desempenho'); });
+    if (navRelFaturamento) navRelFaturamento.addEventListener('click', (e) => { e.preventDefault(); switchView('rel-faturamento'); });
     
     navConfig.addEventListener('click', (e) => { e.preventDefault(); switchView('config'); });
 }
@@ -388,9 +386,11 @@ function switchView(viewName) {
     if (navGestaoBarbeiros) navGestaoBarbeiros.classList.remove('active');
     if (navGestaoServicos) navGestaoServicos.classList.remove('active');
     if (navGestaoUsuarios) navGestaoUsuarios.classList.remove('active');
+    if (navRelDesempenho) navRelDesempenho.classList.remove('active');
+    if (navRelFaturamento) navRelFaturamento.classList.remove('active');
 
     if (viewEstoque) viewEstoque.style.display = 'none';
-    viewDashboard.style.display = 'none';
+    if (viewDashboard) viewDashboard.style.display = 'none';
     if (viewFinanceiro) viewFinanceiro.style.display = 'none';
     if (viewComissoes) viewComissoes.style.display = 'none';
     if (viewConsumo) viewConsumo.style.display = 'none';
@@ -400,12 +400,14 @@ function switchView(viewName) {
     if (viewGestaoBarbeiros) viewGestaoBarbeiros.style.display = 'none';
     if (viewGestaoServicos) viewGestaoServicos.style.display = 'none';
     if (viewGestaoUsuarios) viewGestaoUsuarios.style.display = 'none';
-    viewConfig.style.display = 'none';
+    if (viewRelDesempenho) viewRelDesempenho.style.display = 'none';
+    if (viewRelFaturamento) viewRelFaturamento.style.display = 'none';
+    if (viewConfig) viewConfig.style.display = 'none';
 
     if (viewName === 'dashboard') {
-        navDashboard.classList.add('active');
-        viewDashboard.style.display = 'block';
-        pageTitle.textContent = 'Dashboard do Dia';
+        if (navDashboard) navDashboard.classList.add('active');
+        if (viewDashboard) viewDashboard.style.display = 'block';
+        if (pageTitle) pageTitle.textContent = 'Dashboard do Dia';
         updateDashboard();
     } else if (viewName === 'financeiro') {
         if (navFinanceiro) navFinanceiro.classList.add('active');
@@ -447,10 +449,20 @@ function switchView(viewName) {
         if (viewGestaoUsuarios) viewGestaoUsuarios.style.display = 'block';
         pageTitle.textContent = 'Gestão de Usuários';
         renderUsersList();
+    } else if (viewName === 'rel-desempenho') {
+        if (navRelDesempenho) navRelDesempenho.classList.add('active');
+        if (viewRelDesempenho) viewRelDesempenho.style.display = 'block';
+        pageTitle.textContent = 'Relatório de Desempenho';
+        updatePerformanceReport();
+    } else if (viewName === 'rel-faturamento') {
+        if (navRelFaturamento) navRelFaturamento.classList.add('active');
+        if (viewRelFaturamento) viewRelFaturamento.style.display = 'block';
+        pageTitle.textContent = 'Relatório de Faturamento';
+        updateRelatorioFaturamento();
     } else if (viewName === 'config') {
-        navConfig.classList.add('active');
-        viewConfig.style.display = 'block';
-        pageTitle.textContent = 'Configurações do Sistema';
+        if (navConfig) navConfig.classList.add('active');
+        if (viewConfig) viewConfig.style.display = 'block';
+        if (pageTitle) pageTitle.textContent = 'Configurações do Sistema';
     } else if (viewName === 'estoque') {
         if (navEstoque) navEstoque.classList.add('active');
         if (viewEstoque) viewEstoque.style.display = 'block';
@@ -608,7 +620,6 @@ if (serviceForm) {
 function updateDashboard() {
     renderDailySchedule();
     updateCaixaStatus();
-    renderDashboardChart();
 }
 
 function renderDailySchedule() {
@@ -650,7 +661,12 @@ function renderDailySchedule() {
                 const isPending = servicesInSlot.some(s => s.status === 'pendente');
                 
                 td.className = 'slot-occupied';
-                if (isPending) td.style.borderLeftColor = 'var(--danger-color)';
+                if (isPending) {
+                    td.style.borderLeftColor = 'var(--danger-color)';
+                } else {
+                    td.style.borderLeftColor = '#27ae60';
+                    td.style.background = 'rgba(39, 174, 96, 0.1)';
+                }
 
                 const mainService = servicesInSlot[0];
                 const totalInSlot = servicesInSlot.reduce((acc, curr) => acc + curr.price, 0);
@@ -659,7 +675,7 @@ function renderDailySchedule() {
                     <div class="slot-content" onclick="openServiceDetails('${barber.name}', '${time}')">
                         <span>${isMultiple ? 'Múltiplos Serviços' : mainService.serviceName}</span>
                         <small>R$ ${totalInSlot.toFixed(2).replace('.', ',')}</small>
-                        ${isPending ? '<span class="badge badge-low" style="font-size: 0.6rem; margin-top: 4px;">Pendente</span>' : ''}
+                        ${isPending ? '<span class="badge badge-low" style="font-size: 0.6rem; margin-top: 4px;">Pendente</span>' : '<span class="badge badge-ok" style="font-size: 0.6rem; margin-top: 4px; background: #27ae60;"><i class="fa-solid fa-check"></i> Concluído</span>'}
                         <div class="slot-actions">
                             <button onclick="event.stopPropagation(); deleteServiceInSlot('${barber.name}', '${time}')"><i class="fa-solid fa-trash"></i></button>
                         </div>
@@ -802,9 +818,14 @@ function renderServicesList() {
                 <span class="service-config-name">${s.name}</span>
                 <span class="service-config-price">R$ ${s.defaultPrice.toFixed(2).replace('.', ',')}</span>
             </div>
-            <button class="btn-icon delete" onclick="deleteServiceConfig(${s.id})" title="Excluir Serviço">
-                <i class="fa-solid fa-trash"></i>
-            </button>
+            <div class="action-buttons">
+                <button class="btn-icon" style="color: var(--primary-color);" onclick="editServiceConfig(${s.id})" title="Editar Serviço">
+                    <i class="fa-solid fa-pen"></i>
+                </button>
+                <button class="btn-icon delete" onclick="deleteServiceConfig(${s.id})" title="Excluir Serviço">
+                    <i class="fa-solid fa-trash"></i>
+                </button>
+            </div>
         `;
         container.appendChild(item);
     });
@@ -818,6 +839,51 @@ window.deleteServiceConfig = function(id) {
         populateSelects();
     }
 };
+
+window.editServiceConfig = function(id) {
+    const s = services.find(sc => sc.id === id);
+    if (!s) return;
+    
+    document.getElementById('edit-config-service-id').value = s.id;
+    document.getElementById('edit-config-service-name').value = s.name;
+    document.getElementById('edit-config-service-price').value = s.defaultPrice.toFixed(2);
+    
+    document.getElementById('modal-edit-config-service').style.display = 'flex';
+};
+
+const formEditConfigService = document.getElementById('form-edit-config-service');
+if (formEditConfigService) {
+    formEditConfigService.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const id = parseInt(document.getElementById('edit-config-service-id').value);
+        const newName = document.getElementById('edit-config-service-name').value.trim();
+        const newPrice = parseFloat(document.getElementById('edit-config-service-price').value);
+        
+        if (!newName || isNaN(newPrice)) return;
+        
+        const s = services.find(sc => sc.id === id);
+        if (!s) return;
+        
+        // Atualiza o histórico
+        allServices.forEach(srv => {
+            if (srv.serviceName === s.name) {
+                srv.serviceName = newName;
+            }
+        });
+        
+        s.name = newName;
+        s.defaultPrice = newPrice;
+        
+        saveServiceConfigsToStorage();
+        saveServicesToStorage();
+        renderServicesList();
+        populateSelects();
+        updateDashboard();
+        
+        document.getElementById('modal-edit-config-service').style.display = 'none';
+        alert('Serviço atualizado!');
+    });
+}
 // Financeiro
 function setupFinanceiroFilters() {
     const chips = document.querySelectorAll('.chip[data-fin-period]');
@@ -1191,6 +1257,59 @@ function deleteBarber(id) {
     }
 }
 
+window.editBarber = function(id) {
+    const b = barbers.find(bar => bar.id === id);
+    if (!b) return;
+    
+    document.getElementById('edit-config-barber-id').value = b.id;
+    document.getElementById('edit-config-barber-name').value = b.name;
+    
+    document.getElementById('modal-edit-config-barber').style.display = 'flex';
+};
+
+const formEditConfigBarber = document.getElementById('form-edit-config-barber');
+if (formEditConfigBarber) {
+    formEditConfigBarber.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const id = parseInt(document.getElementById('edit-config-barber-id').value);
+        const newName = document.getElementById('edit-config-barber-name').value.trim();
+        
+        if (!newName) return;
+        
+        const b = barbers.find(bar => bar.id === id);
+        if (!b) return;
+        
+        if (newName === b.name) {
+            document.getElementById('modal-edit-config-barber').style.display = 'none';
+            return;
+        }
+        
+        const oldName = b.name;
+        
+        allServices.forEach(s => {
+            if (s.barber === oldName) s.barber = newName;
+        });
+        
+        allConsumption.forEach(c => {
+            if (c.barber === oldName) c.barber = newName;
+        });
+        
+        b.name = newName;
+        
+        saveBarbersToStorage();
+        saveServicesToStorage();
+        localStorage.setItem('barbearia_ze_consumption', JSON.stringify(allConsumption));
+        
+        renderBarbersList();
+        populateSelects();
+        updateDashboard();
+        if(viewComissoes && viewComissoes.style.display !== 'none') updateComissoes();
+        
+        document.getElementById('modal-edit-config-barber').style.display = 'none';
+        alert('Barbeiro atualizado!');
+    });
+}
+
 function renderBarbersList() {
     const todayServices = getTodayServices();
     barbersListContainer.innerHTML = '';
@@ -1216,7 +1335,10 @@ function renderBarbersList() {
                     <p>R$ ${revenue.toFixed(2).replace('.', ',')}</p>
                     <span>${barberServices.length} serviços hoje</span>
                 </div>
-                <button class="btn-delete" onclick="deleteBarber(${barber.id})" title="Remover"><i class="fa-solid fa-trash"></i></button>
+                <div class="action-buttons">
+                    <button class="btn-delete" style="color: var(--primary-color);" onclick="editBarber(${barber.id})" title="Editar"><i class="fa-solid fa-pen"></i></button>
+                    <button class="btn-delete" onclick="deleteBarber(${barber.id})" title="Remover"><i class="fa-solid fa-trash"></i></button>
+                </div>
             </div>
         `;
         barbersListContainer.appendChild(div);
@@ -1477,6 +1599,12 @@ if (newUserForm) {
         e.preventDefault();
         const uname = newSystemUsername.value.trim().toLowerCase();
         const upass = newSystemPassword.value;
+        const upassConfirm = document.getElementById('new-system-password-confirm').value;
+        
+        if (upass !== upassConfirm) {
+            alert('As senhas não coincidem!');
+            return;
+        }
         
         if (users.find(u => u.username === uname)) {
             alert('Este usuário já existe!');
@@ -1487,6 +1615,7 @@ if (newUserForm) {
         saveUsersToStorage();
         newSystemUsername.value = '';
         newSystemPassword.value = '';
+        document.getElementById('new-system-password-confirm').value = '';
         renderUsersList();
         alert('Usuário criado com sucesso!');
     });
@@ -1494,8 +1623,15 @@ if (newUserForm) {
 
 function deleteUser(id) {
     const userToDelete = users.find(u => u.id === id);
-    if (userToDelete && userToDelete.username === currentUser.username) {
+    if (!userToDelete) return;
+    
+    if (userToDelete.username === currentUser.username) {
         alert('Você não pode excluir a si mesmo!');
+        return;
+    }
+    
+    if (userToDelete.username === 'guilherme') {
+        alert('O usuário ADMIN não pode ser excluído!');
         return;
     }
     
@@ -1506,20 +1642,62 @@ function deleteUser(id) {
     }
 }
 
-if (changePasswordForm) {
-    changePasswordForm.addEventListener('submit', (e) => {
+window.editUser = function(id) {
+    const u = users.find(user => user.id === id);
+    if (!u) return;
+    
+    document.getElementById('edit-user-id').value = u.id;
+    document.getElementById('edit-user-username').value = u.username;
+    document.getElementById('edit-user-password').value = '';
+    
+    document.getElementById('modal-edit-user').style.display = 'flex';
+};
+
+const formEditUser = document.getElementById('form-edit-user');
+if (formEditUser) {
+    formEditUser.addEventListener('submit', (e) => {
         e.preventDefault();
-        const newPass = changePasswordNew.value;
+        const id = parseInt(document.getElementById('edit-user-id').value);
+        const newUsername = document.getElementById('edit-user-username').value.trim().toLowerCase();
+        const newPassword = document.getElementById('edit-user-password').value;
         
-        const index = users.findIndex(u => u.username === currentUser.username);
-        if (index !== -1) {
-            users[index].password = newPass;
-            saveUsersToStorage();
-            currentUser.password = newPass;
-            sessionStorage.setItem('barbearia_logged_in', JSON.stringify(currentUser));
-            changePasswordNew.value = '';
-            alert('Senha redefinida com sucesso!');
+        if (!newUsername) return;
+        
+        const u = users.find(user => user.id === id);
+        if (!u) return;
+        
+        if (newUsername !== u.username && users.some(x => x.username === newUsername)) {
+            alert('Este nome de usuário já está em uso!');
+            return;
         }
+        
+        if (u.username === 'guilherme' && newUsername !== 'guilherme') {
+            alert('O nome do usuário ADMIN não pode ser alterado, apenas a senha.');
+            document.getElementById('edit-user-username').value = 'guilherme';
+            return;
+        }
+        
+        const isMe = (u.username === currentUser.username);
+        
+        u.username = newUsername;
+        if (newPassword) {
+            u.password = newPassword;
+        }
+        
+        if (isMe) {
+            currentUser.username = u.username;
+            currentUser.password = u.password;
+            sessionStorage.setItem('barbearia_logged_in', JSON.stringify(currentUser));
+            if(document.getElementById('user-display-name')) {
+                document.getElementById('user-display-name').textContent = u.username;
+            }
+        }
+        
+        saveUsersToStorage();
+        renderUsersList();
+        
+        document.getElementById('modal-edit-user').style.display = 'none';
+        alert('Usuário atualizado com sucesso!');
     });
 }
 
@@ -1527,17 +1705,21 @@ function renderUsersList() {
     usersListContainer.innerHTML = '';
     users.forEach(user => {
         const isMe = user.username === currentUser.username;
+        const isAdmin = user.username === 'guilherme';
         const initial = user.username.charAt(0).toUpperCase();
 
         const div = document.createElement('div');
         div.className = 'barber-card';
         div.innerHTML = `
             <div class="barber-info">
-                <div class="avatar-small" style="background: #ccc; color: #333;">${initial}</div>
-                <h4>${user.username} ${isMe ? '(Você)' : ''}</h4>
+                <div class="avatar-small" style="background: rgba(255,255,255,0.1); color: var(--primary-color);">${initial}</div>
+                <h4>${user.username} ${isMe ? '<span style="color: var(--text-muted); font-size: 0.8rem;">(Você)</span>' : ''} ${isAdmin ? '<span class="badge badge-ok" style="font-size:0.6rem; padding: 2px 6px;">ADMIN</span>' : ''}</h4>
             </div>
             <div class="barber-right">
-                ${!isMe ? `<button class="btn-delete" onclick="deleteUser(${user.id})" title="Remover Acesso"><i class="fa-solid fa-trash"></i></button>` : ''}
+                <div class="action-buttons">
+                    <button class="btn-icon" style="color: var(--primary-color);" onclick="editUser(${user.id})" title="Editar Usuário"><i class="fa-solid fa-pen"></i></button>
+                    ${!isAdmin ? `<button class="btn-delete" onclick="deleteUser(${user.id})" title="Remover Acesso"><i class="fa-solid fa-trash"></i></button>` : ''}
+                </div>
             </div>
         `;
         usersListContainer.appendChild(div);
@@ -2129,70 +2311,273 @@ window.deleteProduct = function(id) {
     }
 };
 
-// ---- Gráficos ----
-function renderDashboardChart() {
-    const ctx = document.getElementById('mainDashboardChart');
-    if (!ctx) return;
 
-    // Destroy existing chart if any
-    if (dashboardChart) {
-        dashboardChart.destroy();
+// ---- Aba Relatório de Desempenho ----
+function setupPerformanceFilters() {
+    const chips = document.querySelectorAll('#view-rel-desempenho .chip[data-perf-period]');
+    const customRange = document.getElementById('perf-custom-date-range');
+    const startInput = document.getElementById('perf-date-start');
+    const endInput = document.getElementById('perf-date-end');
+    const btnApply = document.getElementById('perf-btn-apply-filter');
+
+    chips.forEach(chip => {
+        chip.addEventListener('click', () => {
+            chips.forEach(c => c.classList.remove('active'));
+            chip.classList.add('active');
+            currentPerfPeriod = chip.dataset.perfPeriod;
+
+            if (currentPerfPeriod === 'custom') {
+                customRange.style.display = 'flex';
+            } else {
+                customRange.style.display = 'none';
+                updatePerformanceReport();
+            }
+        });
+    });
+
+    if (btnApply) {
+        btnApply.addEventListener('click', () => {
+            if (startInput.value && endInput.value) {
+                updatePerformanceReport();
+            } else {
+                alert('Selecione as datas de início e fim.');
+            }
+        });
+    }
+}
+
+function updatePerformanceReport() {
+    const startInput = document.getElementById('perf-date-start');
+    const endInput = document.getElementById('perf-date-end');
+    let startDate, endDate;
+
+    const today = new Date();
+    const todayKey = getTodayKey();
+
+    if (currentPerfPeriod === 'lastMonth') {
+        const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
+        startDate = `${lastMonth.getFullYear()}-${String(lastMonth.getMonth() + 1).padStart(2, '0')}-01`;
+        endDate = `${lastMonthEnd.getFullYear()}-${String(lastMonthEnd.getMonth() + 1).padStart(2, '0')}-${String(lastMonthEnd.getDate()).padStart(2, '0')}`;
+    } else if (currentPerfPeriod === '30days') {
+        startDate = getDateNDaysAgo(29);
+        endDate = todayKey;
+    } else if (currentPerfPeriod === '7days') {
+        startDate = getDateNDaysAgo(6);
+        endDate = todayKey;
+    } else if (currentPerfPeriod === 'month') {
+        startDate = getFirstDayOfMonth();
+        endDate = todayKey;
+    } else if (currentPerfPeriod === 'custom') {
+        startDate = startInput.value;
+        endDate = endInput.value;
+    } else {
+        startDate = getDateNDaysAgo(6);
+        endDate = todayKey;
     }
 
-    // Get last 7 days labels
+    renderPerformanceReportChart(startDate, endDate);
+    updatePerformanceSummary(startDate, endDate);
+}
+
+function renderPerformanceReportChart(startDate, endDate) {
+    const ctx = document.getElementById('performanceReportChart');
+    if (!ctx) return;
+
+    if (performanceReportChart) {
+        performanceReportChart.destroy();
+    }
+
+    // Gerar lista de datas entre start e end
     const labels = [];
     const revenueData = [];
     
-    for (let i = 6; i >= 0; i--) {
-        const date = getDateNDaysAgo(i);
-        const dayLabel = i === 0 ? 'Hoje' : formatDateBR(date).split('/')[0] + '/' + formatDateBR(date).split('/')[1];
-        labels.push(dayLabel);
+    let current = new Date(startDate + 'T00:00:00');
+    const last = new Date(endDate + 'T00:00:00');
+
+    while (current <= last) {
+        const dateKey = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}-${String(current.getDate()).padStart(2, '0')}`;
+        labels.push(formatDateBR(dateKey).split('/')[0] + '/' + formatDateBR(dateKey).split('/')[1]);
         
-        // Calculate revenue for this day (Services + Product Sales)
-        const dayServices = allServices.filter(s => s.date === date && s.status !== 'pendente');
+        const dayServices = allServices.filter(s => s.date === dateKey && s.status !== 'pendente');
         const servicesRev = dayServices.reduce((acc, curr) => acc + curr.price, 0);
         
-        const daySales = productSales.filter(s => s.date === date);
+        const daySales = productSales.filter(s => s.date === dateKey);
         const salesRev = daySales.reduce((acc, curr) => acc + (curr.price * curr.quantity), 0);
         
         revenueData.push(servicesRev + salesRev);
+        
+        current.setDate(current.getDate() + 1);
     }
 
-    dashboardChart = new Chart(ctx, {
+    // Dynamic width calculation to prevent squeezing
+    const wrapper = document.getElementById('perf-canvas-wrapper');
+    if (wrapper) {
+        const minWidthPerPoint = 50; // At least 50px per day
+        const requiredWidth = labels.length * minWidthPerPoint;
+        wrapper.style.minWidth = labels.length > 10 ? `${requiredWidth}px` : '100%';
+    }
+
+    performanceReportChart = new Chart(ctx, {
         type: 'line',
         data: {
             labels: labels,
             datasets: [{
-                label: 'Faturamento Total (R$)',
+                label: 'Faturamento (R$)',
                 data: revenueData,
                 borderColor: '#DAA520',
                 backgroundColor: 'rgba(218, 165, 32, 0.1)',
                 borderWidth: 3,
-                tension: 0.4,
+                tension: 0.3,
                 fill: true,
-                pointBackgroundColor: '#DAA520',
-                pointRadius: 5
+                pointBackgroundColor: '#DAA520'
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: { display: false }
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return 'Faturamento: R$ ' + context.parsed.y.toFixed(2).replace('.', ',');
+                        }
+                    }
+                }
             },
             scales: {
-                y: {
-                    beginAtZero: true,
-                    grid: { color: 'rgba(255,255,255,0.05)' },
-                    ticks: { color: '#a0a0a0' }
-                },
-                x: {
-                    grid: { display: false },
-                    ticks: { color: '#a0a0a0' }
-                }
+                y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#aaa' } },
+                x: { grid: { display: false }, ticks: { color: '#aaa' } }
             }
         }
     });
+}
+
+function updatePerformanceSummary(startDate, endDate) {
+    const services = allServices.filter(s => s.date >= startDate && s.date <= endDate && s.status !== 'pendente');
+    const sales = productSales.filter(s => s.date >= startDate && s.date <= endDate);
+
+    const servicesRevenue = services.reduce((acc, curr) => acc + curr.price, 0);
+    const salesRevenue = sales.reduce((acc, curr) => acc + (curr.price * curr.quantity), 0);
+    const totalRevenue = servicesRevenue + salesRevenue;
+    const totalServices = services.length;
+    const avgTicket = totalServices > 0 ? totalRevenue / totalServices : 0;
+
+    document.getElementById('perf-total-revenue').textContent = `R$ ${totalRevenue.toFixed(2).replace('.', ',')}`;
+    document.getElementById('perf-total-services').textContent = totalServices;
+    document.getElementById('perf-total-products').textContent = `R$ ${salesRevenue.toFixed(2).replace('.', ',')}`;
+    document.getElementById('perf-avg-ticket').textContent = `R$ ${avgTicket.toFixed(2).replace('.', ',')}`;
+}
+
+// ---- Aba Relatório de Faturamento ----
+function setupFaturamentoFilters() {
+    const typeChips = document.querySelectorAll('#view-rel-faturamento .chip[data-fat-type]');
+    const periodChips = document.querySelectorAll('#view-rel-faturamento .chip[data-fat-period]');
+    const customRange = document.getElementById('fat-custom-date-range');
+    const startInput = document.getElementById('fat-date-start');
+    const endInput = document.getElementById('fat-date-end');
+    const btnApply = document.getElementById('fat-btn-apply-filter');
+
+    typeChips.forEach(chip => {
+        chip.addEventListener('click', () => {
+            typeChips.forEach(c => c.classList.remove('active'));
+            chip.classList.add('active');
+            currentFatType = chip.dataset.fatType;
+            updateRelatorioFaturamento();
+        });
+    });
+
+    periodChips.forEach(chip => {
+        chip.addEventListener('click', () => {
+            periodChips.forEach(c => c.classList.remove('active'));
+            chip.classList.add('active');
+            currentFatPeriod = chip.dataset.fatPeriod;
+
+            if (currentFatPeriod === 'custom') {
+                customRange.style.display = 'flex';
+            } else {
+                customRange.style.display = 'none';
+                updateRelatorioFaturamento();
+            }
+        });
+    });
+
+    if (btnApply) {
+        btnApply.addEventListener('click', () => {
+            if (startInput.value && endInput.value) {
+                updateRelatorioFaturamento();
+            } else {
+                alert('Selecione as datas de início e fim.');
+            }
+        });
+    }
+}
+
+function updateRelatorioFaturamento() {
+    const startInput = document.getElementById('fat-date-start');
+    const endInput = document.getElementById('fat-date-end');
+    const { start, end } = getDateRange(currentFatPeriod, startInput, endInput);
+    
+    const body = document.getElementById('fat-history-body');
+    const totalDisplay = document.getElementById('fat-total-display');
+    if (!body) return;
+
+    body.innerHTML = '';
+    let totalValue = 0;
+    let combinedData = [];
+
+    // Buscar Serviços
+    if (currentFatType === 'total' || currentFatType === 'servicos') {
+        const filteredServices = allServices.filter(s => s.date >= start && s.date <= end && s.status !== 'pendente');
+        filteredServices.forEach(s => {
+            combinedData.push({
+                date: s.date,
+                type: 'Serviço',
+                description: `${s.serviceName} (${s.barber})`,
+                payment: s.paymentMethod || 'N/A',
+                value: s.price
+            });
+        });
+    }
+
+    // Buscar Vendas
+    if (currentFatType === 'total' || currentFatType === 'vendas') {
+        const filteredSales = productSales.filter(s => s.date >= start && s.date <= end);
+        filteredSales.forEach(s => {
+            combinedData.push({
+                date: s.date,
+                type: 'Venda',
+                description: `${s.productName} (x${s.quantity})`,
+                payment: s.paymentMethod || 'N/A',
+                value: s.price * s.quantity
+            });
+        });
+    }
+
+    // Ordenar por data (decrescente)
+    combinedData.sort((a, b) => b.date.localeCompare(a.date));
+
+    if (combinedData.length === 0) {
+        body.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhum registro encontrado no período.</td></tr>';
+        totalDisplay.textContent = 'R$ 0,00';
+        return;
+    }
+
+    combinedData.forEach(item => {
+        totalValue += item.value;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${formatDateBR(item.date)}</td>
+            <td><span class="badge ${item.type === 'Serviço' ? 'badge-ok' : 'badge-venda'}" style="background: ${item.type === 'Serviço' ? 'rgba(39, 174, 96, 0.2)' : 'rgba(52, 152, 219, 0.2)'}; color: ${item.type === 'Serviço' ? '#2ecc71' : '#3498db'}; border: 1px solid currentColor;">${item.type}</span></td>
+            <td>${item.description}</td>
+            <td>${item.payment}</td>
+            <td><strong>R$ ${item.value.toFixed(2).replace('.', ',')}</strong></td>
+        `;
+        body.appendChild(tr);
+    });
+
+    totalDisplay.textContent = `R$ ${totalValue.toFixed(2).replace('.', ',')}`;
 }
 
 // ---- Detalhes e Confirmação de Serviço ----
@@ -2268,6 +2653,22 @@ window.openServiceDetails = function(barberName, time) {
                         </tr>
                     `;
                 }).join('')}
+                <tr id="new-service-row" style="display: none; background: rgba(255,255,255,0.05);">
+                    <td>
+                        <select id="new-inline-service" style="min-width: 120px; width: 100%; padding: 6px; font-size: 0.85rem; border-radius: 5px; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--primary-color);" onchange="updateNewInlinePrice(this.value)">
+                            <option value="" disabled selected>Serviço...</option>
+                            ${services.map(sc => `<option value="${sc.id}">${sc.name}</option>`).join('')}
+                        </select>
+                    </td>
+                    <td><input type="number" id="new-inline-price" style="width: 80px; padding: 5px;" value="0.00"></td>
+                    <td>Pendente</td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="btn-icon" style="color: #27ae60;" title="Salvar" onclick="saveNewInlineService('${barberName}', '${time}')"><i class="fa-solid fa-check"></i></button>
+                            <button class="btn-icon" style="color: #e74c3c;" title="Cancelar" onclick="document.getElementById('new-service-row').style.display='none'"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+                    </td>
+                </tr>
             </tbody>
         </table>
         <div style="margin-top: 15px; text-align: right; font-weight: 700; font-size: 1.1rem; color: var(--primary-color);">
@@ -2286,6 +2687,18 @@ window.openServiceDetails = function(barberName, time) {
         serviceDetailsActions.appendChild(btnConfirm);
     }
 
+    const btnAdd = document.createElement('button');
+    btnAdd.className = 'btn-primary';
+    btnAdd.style.flex = '1';
+    btnAdd.style.background = 'rgba(255,255,255,0.1)';
+    btnAdd.style.color = '#fff';
+    btnAdd.innerHTML = '<i class="fa-solid fa-plus"></i> Adicionar Serviço';
+    btnAdd.onclick = () => {
+        document.getElementById('new-service-row').style.display = 'table-row';
+        document.getElementById('new-inline-service').focus();
+    };
+    serviceDetailsActions.appendChild(btnAdd);
+
     modalServiceDetails.style.display = 'flex';
 };
 
@@ -2302,6 +2715,43 @@ window.confirmServiceInSlot = function(barberName, time) {
     if(navFinanceiro && navFinanceiro.classList.contains('active')) updateFinanceiro();
     alert('Atendimento confirmado com sucesso!');
 };
+
+window.updateNewInlinePrice = function(serviceId) {
+    const serviceObj = services.find(sc => sc.id === parseInt(serviceId));
+    if (serviceObj) {
+        document.getElementById('new-inline-price').value = serviceObj.defaultPrice.toFixed(2);
+    }
+};
+
+window.saveNewInlineService = function(barberName, time) {
+    const serviceId = document.getElementById('new-inline-service').value;
+    if (!serviceId) { alert('Selecione um serviço'); return; }
+    const price = parseFloat(document.getElementById('new-inline-price').value);
+    const serviceObj = services.find(sc => sc.id === parseInt(serviceId));
+    
+    // Tenta copiar a forma de pagamento do atendimento existente
+    const today = getTodayKey();
+    const existing = allServices.find(s => s.barber === barberName && s.time === time && s.date === today);
+    const paymentMethod = existing ? existing.paymentMethod : 'Dinheiro';
+    
+    const newEntry = {
+        id: Date.now() + Math.random(),
+        barber: barberName,
+        serviceName: serviceObj.name,
+        price: price,
+        time: time,
+        paymentMethod: paymentMethod,
+        date: today,
+        status: 'pendente'
+    };
+    
+    allServices.push(newEntry);
+    saveServicesToStorage();
+    updateDashboard();
+    if(navFinanceiro && navFinanceiro.classList.contains('active')) updateFinanceiro();
+    openServiceDetails(barberName, time); // Reabre o modal atualizado
+};
+
 
 window.deleteServiceInSlot = function(barberName, time) {
     if (confirm(`Excluir todos os serviços deste horário para ${barberName}?`)) {
