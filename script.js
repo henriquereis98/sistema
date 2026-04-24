@@ -142,6 +142,7 @@ const scheduleBody = document.getElementById('schedule-body');
 const paymentMethodSelect = document.getElementById('payment-method');
 
 const currentDateEl = document.getElementById('current-date');
+const currentTimeEl = document.getElementById('current-time');
 
 // Elementos do DOM - Barbeiros
 const barberForm = document.getElementById('barber-form');
@@ -270,6 +271,7 @@ function showApp() {
 
     // Init App Logic
     displayCurrentDate();
+    startTimeTicker();
     populateSelects();
     updateDashboard();
     setupNavigation();
@@ -316,11 +318,28 @@ if (btnLogout) {
 }
 
 function displayCurrentDate() {
-    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'America/Sao_Paulo' };
     const today = new Date();
     let formattedDate = today.toLocaleDateString('pt-BR', options);
     formattedDate = formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1);
     currentDateEl.textContent = formattedDate;
+}
+
+function startTimeTicker() {
+    if (!currentTimeEl) return;
+    
+    function updateTime() {
+        const now = new Date();
+        currentTimeEl.textContent = now.toLocaleTimeString('pt-BR', { 
+            timeZone: 'America/Sao_Paulo',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
+    }
+    
+    updateTime(); // initial call
+    setInterval(updateTime, 1000);
 }
 
 // ---- Navegação ----
