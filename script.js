@@ -5,7 +5,7 @@ const defaultBarbers = [
     { id: 3, name: 'Pedro' }
 ];
 
-const services = [
+let services = JSON.parse(localStorage.getItem('barbearia_ze_service_configs')) || [
     { id: 1, name: 'Corte Social', defaultPrice: 35.00 },
     { id: 2, name: 'Corte Degradê', defaultPrice: 45.00 },
     { id: 3, name: 'Barba Terapia', defaultPrice: 30.00 },
@@ -13,6 +13,10 @@ const services = [
     { id: 5, name: 'Sobrancelha', defaultPrice: 15.00 },
     { id: 6, name: 'Pigmentação', defaultPrice: 25.00 }
 ];
+
+function saveServiceConfigsToStorage() {
+    localStorage.setItem('barbearia_ze_service_configs', JSON.stringify(services));
+}
 
 const defaultUsers = [
     { id: 1, username: 'guilherme', password: '123' }
@@ -33,7 +37,9 @@ let cashHistory = JSON.parse(localStorage.getItem('barbearia_ze_cash_history')) 
 let allConsumption = JSON.parse(localStorage.getItem('barbearia_ze_consumption')) || [];
 let inventory = JSON.parse(localStorage.getItem('barbearia_ze_inventory')) || [];
 let productSales = JSON.parse(localStorage.getItem('barbearia_ze_product_sales')) || [];
+let currentVendasPeriod = 'today';
 let dashboardChart = null;
+let selectedServicesForNewEntry = [];
 
 // ---- Helpers de Data ----
 function getTodayKey() {
@@ -102,14 +108,27 @@ const navFinanceiro = document.getElementById('nav-financeiro');
 const navConfig = document.getElementById('nav-config');
 const navRelCaixa = document.getElementById('nav-rel-caixa');
 const navRelServicos = document.getElementById('nav-rel-servicos');
+const navGestaoBarbeiros = document.getElementById('nav-gestao-barbeiros');
+const navGestaoServicos = document.getElementById('nav-gestao-servicos');
+const navGestaoUsuarios = document.getElementById('nav-gestao-usuarios');
+
 const navRelatoriosParent = document.getElementById('nav-relatorios-parent');
+const navVendasParent = document.getElementById('nav-vendas-parent');
+const navGestaoParent = document.getElementById('nav-gestao-parent');
+
 const viewDashboard = document.getElementById('view-dashboard');
 const viewFinanceiro = document.getElementById('view-financeiro');
 const viewConfig = document.getElementById('view-configuracoes');
 const viewRelCaixa = document.getElementById('view-rel-caixa');
 const viewRelServicos = document.getElementById('view-rel-servicos');
+const viewGestaoBarbeiros = document.getElementById('view-gestao-barbeiros');
+const viewGestaoServicos = document.getElementById('view-gestao-servicos');
+const viewGestaoUsuarios = document.getElementById('view-gestao-usuarios');
 const navEstoque = document.getElementById('nav-estoque');
 const viewEstoque = document.getElementById('view-estoque');
+const navVendas = document.getElementById('nav-vendas');
+const viewVendas = document.getElementById('view-vendas');
+const salesHistoryList = document.getElementById('sales-history-list');
 const pageTitle = document.getElementById('page-title');
 
 // Elementos do DOM - Dashboard
@@ -260,6 +279,9 @@ function showApp() {
     setupConsumo();
     setupCaixa();
     setupEstoque();
+    setupVendas();
+    setupMultiService();
+    setupConfigServices();
     renderDashboardChart();
 }
 
@@ -307,19 +329,30 @@ function setupNavigation() {
     if (navFinanceiro) navFinanceiro.addEventListener('click', (e) => { e.preventDefault(); switchView('financeiro'); });
     if (navComissoes) navComissoes.addEventListener('click', (e) => { e.preventDefault(); switchView('comissoes'); });
     if (navConsumo) navConsumo.addEventListener('click', (e) => { e.preventDefault(); switchView('consumo'); });
+    if (navVendas) navVendas.addEventListener('click', (e) => { e.preventDefault(); switchView('vendas'); });
     if (navEstoque) navEstoque.addEventListener('click', (e) => { e.preventDefault(); switchView('estoque'); });
     
-    // Submenu Toggle
-    const submenuToggle = document.querySelector('.submenu-toggle');
-    if (submenuToggle) {
-        submenuToggle.addEventListener('click', (e) => {
+    // Submenu Toggles
+    document.querySelectorAll('.submenu-toggle').forEach(toggle => {
+        toggle.addEventListener('click', (e) => {
             e.preventDefault();
-            navRelatoriosParent.classList.toggle('open');
+            const parent = toggle.closest('.has-submenu');
+            if (parent) {
+                // Fecha outros submenus se quiser (opcional)
+                // document.querySelectorAll('.has-submenu').forEach(other => {
+                //     if(other !== parent) other.classList.remove('open');
+                // });
+                parent.classList.toggle('open');
+            }
         });
-    }
+    });
 
     if (navRelCaixa) navRelCaixa.addEventListener('click', (e) => { e.preventDefault(); switchView('rel-caixa'); });
     if (navRelServicos) navRelServicos.addEventListener('click', (e) => { e.preventDefault(); switchView('rel-servicos'); });
+    if (navGestaoBarbeiros) navGestaoBarbeiros.addEventListener('click', (e) => { e.preventDefault(); switchView('gestao-barbeiros'); });
+    if (navGestaoServicos) navGestaoServicos.addEventListener('click', (e) => { e.preventDefault(); switchView('gestao-servicos'); });
+    if (navGestaoUsuarios) navGestaoUsuarios.addEventListener('click', (e) => { e.preventDefault(); switchView('gestao-usuarios'); });
+    
     navConfig.addEventListener('click', (e) => { e.preventDefault(); switchView('config'); });
 }
 
@@ -332,6 +365,10 @@ function switchView(viewName) {
     if (navRelServicos) navRelServicos.classList.remove('active');
     if (navConfig) navConfig.classList.remove('active');
     if (navEstoque) navEstoque.classList.remove('active');
+    if (navVendas) navVendas.classList.remove('active');
+    if (navGestaoBarbeiros) navGestaoBarbeiros.classList.remove('active');
+    if (navGestaoServicos) navGestaoServicos.classList.remove('active');
+    if (navGestaoUsuarios) navGestaoUsuarios.classList.remove('active');
 
     if (viewEstoque) viewEstoque.style.display = 'none';
     viewDashboard.style.display = 'none';
@@ -340,6 +377,10 @@ function switchView(viewName) {
     if (viewConsumo) viewConsumo.style.display = 'none';
     if (viewRelCaixa) viewRelCaixa.style.display = 'none';
     if (viewRelServicos) viewRelServicos.style.display = 'none';
+    if (viewVendas) viewVendas.style.display = 'none';
+    if (viewGestaoBarbeiros) viewGestaoBarbeiros.style.display = 'none';
+    if (viewGestaoServicos) viewGestaoServicos.style.display = 'none';
+    if (viewGestaoUsuarios) viewGestaoUsuarios.style.display = 'none';
     viewConfig.style.display = 'none';
 
     if (viewName === 'dashboard') {
@@ -372,27 +413,36 @@ function switchView(viewName) {
         if (viewConsumo) viewConsumo.style.display = 'block';
         pageTitle.textContent = 'Consumo Interno';
         renderConsumoList();
-    } else if (viewName === 'rel-caixa') {
-        if (navRelCaixa) navRelCaixa.classList.add('active');
-        if (viewRelCaixa) viewRelCaixa.style.display = 'block';
-        pageTitle.textContent = 'Histórico de Caixa';
-        updateReportsCaixa();
-    } else if (viewName === 'rel-servicos') {
-        if (navRelServicos) navRelServicos.classList.add('active');
-        if (viewRelServicos) viewRelServicos.style.display = 'block';
-        pageTitle.textContent = 'Histórico de Serviços';
-        updateReportsServicos();
+    } else if (viewName === 'gestao-barbeiros') {
+        if (navGestaoBarbeiros) navGestaoBarbeiros.classList.add('active');
+        if (viewGestaoBarbeiros) viewGestaoBarbeiros.style.display = 'block';
+        pageTitle.textContent = 'Gestão de Barbeiros';
+        renderBarbersList();
+    } else if (viewName === 'gestao-servicos') {
+        if (navGestaoServicos) navGestaoServicos.classList.add('active');
+        if (viewGestaoServicos) viewGestaoServicos.style.display = 'block';
+        pageTitle.textContent = 'Gestão de Serviços';
+        renderServicesList();
+    } else if (viewName === 'gestao-usuarios') {
+        if (navGestaoUsuarios) navGestaoUsuarios.classList.add('active');
+        if (viewGestaoUsuarios) viewGestaoUsuarios.style.display = 'block';
+        pageTitle.textContent = 'Gestão de Usuários';
+        renderUsersList();
     } else if (viewName === 'config') {
         navConfig.classList.add('active');
         viewConfig.style.display = 'block';
         pageTitle.textContent = 'Configurações do Sistema';
-        renderBarbersList();
-        renderUsersList();
     } else if (viewName === 'estoque') {
         if (navEstoque) navEstoque.classList.add('active');
         if (viewEstoque) viewEstoque.style.display = 'block';
-        pageTitle.textContent = 'Estoque e Vendas';
+        pageTitle.textContent = 'Gerenciar Estoque';
         renderInventory();
+        populateProductSelect();
+    } else if (viewName === 'vendas') {
+        if (navVendas) navVendas.classList.add('active');
+        if (viewVendas) viewVendas.style.display = 'block';
+        pageTitle.textContent = 'Vendas e Produtos';
+        updateVendas();
         populateProductSelect();
     }
 }
@@ -428,56 +478,113 @@ function populateSelects() {
         }
     });
 
-    if(serviceSelect.options.length <= 1) {
+    const sSelect = document.getElementById('service-select');
+    if (sSelect) {
+        sSelect.innerHTML = '<option value="" disabled selected>Selecione o serviço</option>';
         services.forEach(service => {
+            const price = service.defaultPrice || 0;
             const option = document.createElement('option');
             option.value = service.id;
-            option.textContent = `${service.name} - R$ ${service.defaultPrice.toFixed(2)}`;
-            serviceSelect.appendChild(option);
+            option.textContent = `${service.name} - R$ ${price.toFixed(2)}`;
+            sSelect.appendChild(option);
         });
     }
 }
 
-serviceSelect.addEventListener('change', (e) => {
-    const selectedId = parseInt(e.target.value);
-    const service = services.find(s => s.id === selectedId);
-    if (service) { priceInput.value = service.defaultPrice.toFixed(2); }
-});
+function setupMultiService() {
+    const btnAdd = document.getElementById('btn-add-service-to-list');
+    const select = document.getElementById('service-select');
 
-serviceForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const barberName = barberSelect.value;
-    const serviceId = parseInt(serviceSelect.value);
-    const service = services.find(s => s.id === serviceId);
-    const price = parseFloat(priceInput.value);
-    const timeValue = timeInput.value;
-    const paymentMethod = paymentMethodSelect.value;
+    if (btnAdd && select) {
+        btnAdd.onclick = () => {
+            const serviceId = parseInt(select.value);
+            const service = services.find(s => s.id === serviceId);
 
-    if (!barberName || !service || isNaN(price) || !timeValue || !paymentMethod) {
-        alert("Por favor, preencha todos os campos.");
-        return;
+            if (service) {
+                selectedServicesForNewEntry.push({
+                    name: service.name,
+                    price: service.defaultPrice
+                });
+                renderSelectedServices();
+                select.value = "";
+            } else {
+                alert('Selecione um serviço primeiro.');
+            }
+        };
     }
+}
 
-    const newEntry = {
-        id: Date.now(),
-        barber: barberName,
-        serviceName: service.name,
-        price: price,
-        time: timeValue,
-        paymentMethod: paymentMethod,
-        date: getTodayKey()
-    };
+function renderSelectedServices() {
+    const container = document.getElementById('selected-services-container');
+    if (!container) return;
+    container.innerHTML = '';
 
-    allServices.unshift(newEntry);
-    saveServicesToStorage();
-    updateDashboard();
-    if(navFinanceiro && navFinanceiro.classList.contains('active')) updateFinanceiro();
-    
-    serviceSelect.value = '';
-    priceInput.value = '';
-    timeInput.value = '';
-    paymentMethodSelect.value = '';
-});
+    let total = 0;
+    selectedServicesForNewEntry.forEach((s, index) => {
+        total += s.price;
+        const tag = document.createElement('div');
+        tag.className = 'selected-service-tag';
+        tag.innerHTML = `
+            ${s.name} (R$ ${s.price.toFixed(2)})
+            <i class="fa-solid fa-xmark" onclick="removeSelectedService(${index})"></i>
+        `;
+        container.appendChild(tag);
+    });
+
+    if (priceInput) {
+        priceInput.value = total > 0 ? total.toFixed(2) : "";
+    }
+}
+
+window.removeSelectedService = function(index) {
+    selectedServicesForNewEntry.splice(index, 1);
+    renderSelectedServices();
+};
+
+if (serviceForm) {
+    serviceForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        
+        if (selectedServicesForNewEntry.length === 0) {
+            alert('Adicione pelo menos um serviço na lista.');
+            return;
+        }
+
+        const barberName = barberSelect.value;
+        const timeValue = timeInput.value;
+        const paymentMethod = paymentMethodSelect.value;
+
+        if (!barberName || !timeValue || !paymentMethod) {
+            alert("Por favor, preencha todos os campos.");
+            return;
+        }
+
+        // Registra cada serviço da lista como uma entrada separada
+        selectedServicesForNewEntry.forEach(s => {
+            const newEntry = {
+                id: Date.now() + Math.random(),
+                barber: barberName,
+                serviceName: s.name,
+                price: s.price,
+                time: timeValue,
+                paymentMethod: paymentMethod,
+                date: getTodayKey(),
+                status: 'pendente'
+            };
+            allServices.unshift(newEntry);
+        });
+
+        saveServicesToStorage();
+        updateDashboard();
+        if(navFinanceiro && navFinanceiro.classList.contains('active')) updateFinanceiro();
+        
+        // Limpeza
+        serviceForm.reset();
+        selectedServicesForNewEntry = [];
+        renderSelectedServices();
+        alert('Atendimento(s) registrado(s) com sucesso!');
+    });
+}
 
 function updateDashboard() {
     renderDailySchedule();
@@ -517,27 +624,36 @@ function renderDailySchedule() {
             const td = document.createElement('td');
             
             // Check if there is a service for this barber at this time
-            const existingService = todayServices.find(s => s.barber === barber.name && s.time === time);
+            const servicesInSlot = todayServices.filter(s => s.barber === barber.name && s.time === time);
             
-            if (existingService) {
+            if (servicesInSlot.length > 0) {
+                const isMultiple = servicesInSlot.length > 1;
+                const isPending = servicesInSlot.some(s => s.status === 'pendente');
+                
                 td.className = 'slot-occupied';
+                if (isPending) td.style.borderLeftColor = 'var(--danger-color)';
+
+                const mainService = servicesInSlot[0];
+                const totalInSlot = servicesInSlot.reduce((acc, curr) => acc + curr.price, 0);
+
                 td.innerHTML = `
-                    <div class="slot-content">
-                        <span>${existingService.serviceName}</span>
-                        <small>R$ ${existingService.price.toFixed(2).replace('.', ',')}</small>
+                    <div class="slot-content" onclick="openServiceDetails('${barber.name}', '${time}')">
+                        <span>${isMultiple ? 'Múltiplos Serviços' : mainService.serviceName}</span>
+                        <small>R$ ${totalInSlot.toFixed(2).replace('.', ',')}</small>
+                        ${isPending ? '<span class="badge badge-low" style="font-size: 0.6rem; margin-top: 4px;">Pendente</span>' : ''}
                         <div class="slot-actions">
-                            <button onclick="event.stopPropagation(); deleteService(${existingService.id})"><i class="fa-solid fa-trash"></i></button>
+                            <button onclick="event.stopPropagation(); deleteServiceInSlot('${barber.name}', '${time}')"><i class="fa-solid fa-trash"></i></button>
                         </div>
                     </div>
                 `;
-                td.title = 'Serviço já registrado';
+                td.title = isPending ? 'Atendimento pendente de confirmação' : 'Atendimento confirmado';
             } else {
                 td.className = 'slot-free';
                 td.title = 'Clique para registrar serviço neste horário';
                 td.onclick = () => {
                     barberSelect.value = barber.name;
                     timeInput.value = time;
-                    serviceSelect.focus();
+                    if (serviceSelect) serviceSelect.focus();
                 };
             }
             tr.appendChild(td);
@@ -629,6 +745,60 @@ if (editServiceForm) {
         }
     };
 }
+
+function setupConfigServices() {
+    const form = document.getElementById('new-service-form');
+    if (form) {
+        form.onsubmit = (e) => {
+            e.preventDefault();
+            const name = document.getElementById('new-service-name').value;
+            const price = parseFloat(document.getElementById('new-service-price').value);
+
+            const newService = {
+                id: Date.now(),
+                name: name,
+                defaultPrice: price
+            };
+
+            services.push(newService);
+            saveServiceConfigsToStorage();
+            form.reset();
+            renderServicesList();
+            populateSelects();
+            alert('Serviço cadastrado!');
+        };
+    }
+}
+
+function renderServicesList() {
+    const container = document.getElementById('services-list-container');
+    if (!container) return;
+    container.innerHTML = '';
+
+    services.forEach(s => {
+        const item = document.createElement('div');
+        item.className = 'service-config-item';
+        item.innerHTML = `
+            <div class="service-config-info">
+                <span class="service-config-name">${s.name}</span>
+                <span class="service-config-price">R$ ${s.defaultPrice.toFixed(2).replace('.', ',')}</span>
+            </div>
+            <button class="btn-icon delete" onclick="deleteServiceConfig(${s.id})" title="Excluir Serviço">
+                <i class="fa-solid fa-trash"></i>
+            </button>
+        `;
+        container.appendChild(item);
+    });
+}
+
+window.deleteServiceConfig = function(id) {
+    if (confirm('Deseja excluir este serviço?')) {
+        services = services.filter(s => s.id !== id);
+        saveServiceConfigsToStorage();
+        renderServicesList();
+        populateSelects();
+    }
+};
 // Financeiro
 function setupFinanceiroFilters() {
     const chips = document.querySelectorAll('.chip[data-fin-period]');
@@ -665,7 +835,7 @@ function getFinanceiroDateRange() {
 function updateFinanceiro() {
     const { start, end } = getFinanceiroDateRange();
     
-    const filteredServices = getServicesByDateRange(start, end);
+    const filteredServices = getServicesByDateRange(start, end).filter(s => s.status !== 'pendente');
     const filteredSales = productSales.filter(s => s.date >= start && s.date <= end);
     
     const servicesRevenue = filteredServices.reduce((acc, curr) => acc + curr.price, 0);
@@ -764,7 +934,7 @@ function getComissoesDateRange() {
 
 function updateComissoes() {
     const { start, end } = getComissoesDateRange();
-    let filteredServices = getServicesByDateRange(start, end);
+    let filteredServices = getServicesByDateRange(start, end).filter(s => s.status !== 'pendente');
     let filteredConsumo = getConsumptionByDateRange(start, end);
     
     if (currentComissoesBarber !== 'all') {
@@ -1011,7 +1181,7 @@ function renderBarbersList() {
     }
 
     barbers.forEach(barber => {
-        const barberServices = todayServices.filter(s => s.barber === barber.name);
+        const barberServices = todayServices.filter(s => s.barber === barber.name && s.status !== 'pendente');
         const revenue = barberServices.reduce((acc, curr) => acc + curr.price, 0);
         const initial = barber.name.charAt(0).toUpperCase();
 
@@ -1098,7 +1268,7 @@ function updateReportsCaixa() {
 
 function updateReportsServicos() {
     const { start, end } = getDateRange(currentRelServicosPeriod, dateStartInputServicos, dateEndInputServicos);
-    const filtered = getServicesByDateRange(start, end);
+    const filtered = getServicesByDateRange(start, end).filter(s => s.status !== 'pendente');
     renderReportHistory(filtered);
 }
 
@@ -1125,7 +1295,7 @@ function renderCashHistory(start, end) {
         // Calculate services if not closed yet
         let servicesTotal = c.servicesValue;
         if (c.status === 'aberto') {
-            const todayServices = allServices.filter(s => s.date === c.date);
+            const todayServices = allServices.filter(s => s.date === c.date && s.status !== 'pendente');
             servicesTotal = todayServices.reduce((acc, curr) => acc + curr.price, 0);
             finalValue = c.openingValue + servicesTotal;
         }
@@ -1368,12 +1538,19 @@ function loadFromLocalStorage() {
     if (savedServices) {
         try {
             allServices = JSON.parse(savedServices);
-            // Migração: adiciona campo date para entradas antigas que não possuem
+            
+            // Filtro de segurança: remove entradas que não são de atendimento (migração/erro de colisão)
+            if (Array.isArray(allServices)) {
+                allServices = allServices.filter(s => s.barber || s.barberName || s.serviceName);
+            } else {
+                allServices = [];
+            }
+
+            // Migração: adiciona campo date e status para entradas antigas
             const today = getTodayKey();
             allServices = allServices.map(s => {
-                if (!s.date) {
-                    return { ...s, date: today };
-                }
+                if (!s.date) s.date = today;
+                if (!s.status) s.status = 'concluido';
                 return s;
             });
             saveServicesToStorage();
@@ -1496,7 +1673,7 @@ importFileInput.addEventListener('change', (e) => {
                 cashHistory = [];
             }
 
-            saveServicesToStorage();
+            saveServiceConfigsToStorage();
             saveBarbersToStorage();
             saveUsersToStorage();
             saveCashRegisterToStorage();
@@ -1535,6 +1712,7 @@ if (btnClearFinancial) {
 
         // Salva estados vazios
         saveServicesToStorage();
+        saveServiceConfigsToStorage();
         saveCashRegisterToStorage();
         localStorage.setItem('barbearia_ze_consumption', JSON.stringify(allConsumption));
         saveProductSalesToStorage();
@@ -1610,12 +1788,17 @@ function setupCaixa() {
 
         if (confirm('Tem certeza que deseja encerrar o expediente de hoje?\nIsso fechará o caixa e os valores não poderão mais ser alterados.')) {
             const todayServices = getTodayServices();
-            const servicesRevenue = todayServices.reduce((acc, curr) => acc + curr.price, 0);
+            const servicesRev = todayServices.reduce((acc, curr) => acc + curr.price, 0);
             
+            const todaySales = productSales.filter(s => s.date === today);
+            const salesRev = todaySales.reduce((acc, curr) => acc + (curr.price * curr.quantity), 0);
+            
+            const totalRevenue = servicesRev + salesRev;
+
             todayCash.status = 'fechado';
             todayCash.closedAt = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-            todayCash.servicesValue = servicesRevenue;
-            todayCash.finalValue = todayCash.openingValue + servicesRevenue;
+            todayCash.servicesValue = totalRevenue;
+            todayCash.finalValue = todayCash.openingValue + totalRevenue;
             
             saveCashRegisterToStorage();
             updateDashboard();
@@ -1665,7 +1848,8 @@ function updateCaixaStatus() {
 
         if (todayCash.status === 'aberto') {
             const todayServices = getTodayServices();
-            servicesRevenue = todayServices.reduce((acc, curr) => acc + curr.price, 0);
+            const confirmedServices = todayServices.filter(s => s.status !== 'pendente');
+            servicesRevenue = confirmedServices.reduce((acc, curr) => acc + curr.price, 0);
             
             // Add product sales to today's total if any
             const todaySales = productSales.filter(s => s.date === today);
@@ -1697,7 +1881,6 @@ function updateCaixaStatus() {
 // ---- Estoque e Vendas ----
 function setupEstoque() {
     const productForm = document.getElementById('product-form');
-    const saleForm = document.getElementById('sale-form');
 
     if (productForm) {
         productForm.addEventListener('submit', (e) => {
@@ -1715,7 +1898,11 @@ function setupEstoque() {
             alert('Produto cadastrado!');
         });
     }
+}
 
+// ---- Aba Vendas ----
+function setupVendas() {
+    const saleForm = document.getElementById('sale-form');
     if (saleForm) {
         saleForm.addEventListener('submit', (e) => {
             e.preventDefault();
@@ -1742,17 +1929,94 @@ function setupEstoque() {
                 date: getTodayKey()
             };
 
-            productSales.push(newSale);
+            productSales.unshift(newSale);
             saveInventoryToStorage();
             saveProductSalesToStorage();
             
             saleForm.reset();
-            renderInventory();
+            updateVendas();
             updateDashboard();
             alert('Venda realizada com sucesso!');
         });
     }
+
+    // Setup Vendas Filters
+    const chips = document.querySelectorAll('.chip[data-sale-period]');
+    const customRange = document.getElementById('sale-custom-date-range');
+    const startInput = document.getElementById('sale-date-start');
+    const endInput = document.getElementById('sale-date-end');
+    const btnApply = document.getElementById('sale-btn-apply-filter');
+
+    chips.forEach(chip => {
+        chip.addEventListener('click', () => {
+            chips.forEach(c => c.classList.remove('active'));
+            chip.classList.add('active');
+            currentVendasPeriod = chip.dataset.salePeriod;
+
+            if (currentVendasPeriod === 'custom') {
+                customRange.style.display = 'flex';
+            } else {
+                customRange.style.display = 'none';
+                updateVendas();
+            }
+        });
+    });
+
+    if (btnApply) {
+        btnApply.addEventListener('click', () => {
+            if (startInput.value && endInput.value) {
+                updateVendas();
+            } else {
+                alert('Selecione as datas de início e fim.');
+            }
+        });
+    }
 }
+
+function updateVendas() {
+    const startInput = document.getElementById('sale-date-start');
+    const endInput = document.getElementById('sale-date-end');
+    const { start, end } = getDateRange(currentVendasPeriod, startInput, endInput);
+    
+    const filteredSales = productSales.filter(s => s.date >= start && s.date <= end);
+    renderSalesHistory(filteredSales);
+}
+
+function renderSalesHistory(salesList) {
+    if (!salesHistoryList) return;
+    salesHistoryList.innerHTML = '';
+
+    if (salesList.length === 0) {
+        salesHistoryList.innerHTML = '<tr><td colspan="6" class="empty-state">Nenhuma venda encontrada no período.</td></tr>';
+        return;
+    }
+
+    salesList.forEach(s => {
+        const total = s.price * s.quantity;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${formatDateBR(s.date)}</td>
+            <td>${s.productName}</td>
+            <td>${s.quantity}</td>
+            <td>${s.paymentMethod}</td>
+            <td><strong>R$ ${total.toFixed(2).replace('.', ',')}</strong></td>
+            <td>
+                <button class="btn-icon delete" onclick="deleteSale(${s.id})"><i class="fa-solid fa-trash"></i></button>
+            </td>
+        `;
+        salesHistoryList.appendChild(tr);
+    });
+}
+
+window.deleteSale = function(id) {
+    if (confirm('Deseja excluir este registro de venda? O estoque não será devolvido automaticamente.')) {
+        productSales = productSales.filter(s => s.id !== id);
+        saveProductSalesToStorage();
+        updateVendas();
+        updateDashboard();
+        if (navFinanceiro && navFinanceiro.classList.contains('active')) updateFinanceiro();
+    }
+};
 
 function renderInventory() {
     const list = document.getElementById('inventory-list');
@@ -1768,11 +2032,61 @@ function renderInventory() {
             <td>R$ ${p.price.toFixed(2).replace('.', ',')}</td>
             <td>${p.stock} un</td>
             <td>${status}</td>
-            <td>
+            <td style="display: flex; gap: 8px;">
+                <button class="btn-icon edit" onclick="openEditProduct(${p.id})"><i class="fa-solid fa-pen-to-square"></i></button>
                 <button class="btn-icon delete" onclick="deleteProduct(${p.id})"><i class="fa-solid fa-trash"></i></button>
             </td>
         `;
         list.appendChild(tr);
+    });
+}
+
+const modalEditProduct = document.getElementById('modal-edit-product');
+const modalEditProductClose = document.getElementById('modal-edit-product-close');
+const editProductForm = document.getElementById('edit-product-form');
+
+if (modalEditProductClose) {
+    modalEditProductClose.addEventListener('click', () => modalEditProduct.style.display = 'none');
+}
+const modalEditProductCloseX = document.getElementById('modal-edit-product-close-x');
+if (modalEditProductCloseX) {
+    modalEditProductCloseX.addEventListener('click', () => modalEditProduct.style.display = 'none');
+}
+if (modalEditProduct) {
+    modalEditProduct.addEventListener('click', (e) => { if (e.target === modalEditProduct) modalEditProduct.style.display = 'none'; });
+}
+
+window.openEditProduct = function(id) {
+    const product = inventory.find(p => p.id === id);
+    if (!product) return;
+
+    document.getElementById('edit-prod-id').value = product.id;
+    document.getElementById('edit-prod-name').value = product.name;
+    document.getElementById('edit-prod-price').value = product.price;
+    document.getElementById('edit-prod-stock').value = product.stock;
+
+    modalEditProduct.style.display = 'flex';
+};
+
+if (editProductForm) {
+    editProductForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const id = parseInt(document.getElementById('edit-prod-id').value);
+        const name = document.getElementById('edit-prod-name').value;
+        const price = parseFloat(document.getElementById('edit-prod-price').value);
+        const stock = parseInt(document.getElementById('edit-prod-stock').value);
+
+        const product = inventory.find(p => p.id === id);
+        if (product) {
+            product.name = name;
+            product.price = price;
+            product.stock = stock;
+            saveInventoryToStorage();
+            renderInventory();
+            populateProductSelect();
+            modalEditProduct.style.display = 'none';
+            alert('Produto atualizado!');
+        }
     });
 }
 
@@ -1816,7 +2130,7 @@ function renderDashboardChart() {
         labels.push(dayLabel);
         
         // Calculate revenue for this day (Services + Product Sales)
-        const dayServices = allServices.filter(s => s.date === date);
+        const dayServices = allServices.filter(s => s.date === date && s.status !== 'pendente');
         const servicesRev = dayServices.reduce((acc, curr) => acc + curr.price, 0);
         
         const daySales = productSales.filter(s => s.date === date);
@@ -1861,6 +2175,174 @@ function renderDashboardChart() {
         }
     });
 }
+
+// ---- Detalhes e Confirmação de Serviço ----
+const modalServiceDetails = document.getElementById('modal-service-details');
+const modalServiceDetailsClose = document.getElementById('modal-service-details-close');
+const serviceDetailsContent = document.getElementById('service-details-content');
+const serviceDetailsActions = document.getElementById('service-details-actions');
+
+let editingServiceInModal = null;
+
+if (modalServiceDetailsClose) {
+    modalServiceDetailsClose.onclick = () => {
+        modalServiceDetails.style.display = 'none';
+        editingServiceInModal = null;
+    };
+}
+
+window.openServiceDetails = function(barberName, time) {
+    const today = getTodayKey();
+    const slotAttendances = allServices.filter(s => s.barber === barberName && s.time === time && s.date === today);
+    if (slotAttendances.length === 0) return;
+
+    const isPending = slotAttendances.some(s => s.status === 'pendente');
+    
+    serviceDetailsContent.innerHTML = `
+        <div style="margin-bottom: 20px;">
+            <p><strong>Barbeiro:</strong> ${barberName}</p>
+            <p><strong>Horário:</strong> ${time}</p>
+            <p><strong>Status Geral:</strong> ${isPending ? '<span class="badge badge-low">Pendente</span>' : '<span class="badge badge-ok">Confirmado</span>'}</p>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Serviço</th>
+                    <th>Valor</th>
+                    <th>Status</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${slotAttendances.map(s => {
+                    if (s.id === editingServiceInModal) {
+                        return `
+                            <tr>
+                                <td>
+                                    <select id="edit-inline-service" style="min-width: 120px; width: 100%; padding: 6px; font-size: 0.85rem; border-radius: 5px; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--primary-color);" onchange="updateInlinePrice(this.value)">
+                                        <option value="" disabled>Serviço...</option>
+                                        ${services.map(sc => `<option value="${sc.id}" ${sc.name === s.serviceName ? 'selected' : ''}>${sc.name}</option>`).join('')}
+                                    </select>
+                                </td>
+                                <td><input type="number" id="edit-inline-price" style="width: 80px; padding: 5px;" value="${s.price}"></td>
+                                <td>${s.status === 'pendente' ? 'Pendente' : 'Confirmado'}</td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <button class="btn-icon" style="color: #27ae60;" title="Salvar" onclick="saveInlineEdit(${s.id}, '${barberName}', '${time}')"><i class="fa-solid fa-check"></i></button>
+                                        <button class="btn-icon" style="color: #e74c3c;" title="Cancelar" onclick="cancelInlineEdit('${barberName}', '${time}')"><i class="fa-solid fa-xmark"></i></button>
+                                    </div>
+                                </td>
+                            </tr>
+                        `;
+                    }
+                    return `
+                        <tr>
+                            <td>${s.serviceName}</td>
+                            <td>R$ ${s.price.toFixed(2).replace('.', ',')}</td>
+                            <td>${s.status === 'pendente' ? 'Pendente' : 'Confirmado'}</td>
+                            <td>
+                                <div class="action-buttons">
+                                    <button class="btn-icon" title="Editar" onclick="startInlineEdit(${s.id}, '${barberName}', '${time}')"><i class="fa-solid fa-pen"></i></button>
+                                    <button class="btn-icon delete" title="Excluir" onclick="deleteServiceFromModal(${s.id}, '${barberName}', '${time}')"><i class="fa-solid fa-trash"></i></button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                }).join('')}
+            </tbody>
+        </table>
+        <div style="margin-top: 15px; text-align: right; font-weight: 700; font-size: 1.1rem; color: var(--primary-color);">
+            Total: R$ ${slotAttendances.reduce((acc, curr) => acc + curr.price, 0).toFixed(2).replace('.', ',')}
+        </div>
+    `;
+
+    serviceDetailsActions.innerHTML = '';
+    
+    if (isPending) {
+        const btnConfirm = document.createElement('button');
+        btnConfirm.className = 'btn-success'; // Mudado para verde
+        btnConfirm.style.flex = '1';
+        btnConfirm.innerHTML = '<i class="fa-solid fa-check"></i> Confirmar Atendimento';
+        btnConfirm.onclick = () => confirmServiceInSlot(barberName, time);
+        serviceDetailsActions.appendChild(btnConfirm);
+    }
+
+    modalServiceDetails.style.display = 'flex';
+};
+
+window.confirmServiceInSlot = function(barberName, time) {
+    const today = getTodayKey();
+    allServices.forEach(s => {
+        if (s.barber === barberName && s.time === time && s.date === today) {
+            s.status = 'concluido';
+        }
+    });
+    saveServicesToStorage();
+    modalServiceDetails.style.display = 'none';
+    updateDashboard();
+    if(navFinanceiro && navFinanceiro.classList.contains('active')) updateFinanceiro();
+    alert('Atendimento confirmado com sucesso!');
+};
+
+window.deleteServiceInSlot = function(barberName, time) {
+    if (confirm(`Excluir todos os serviços deste horário para ${barberName}?`)) {
+        const today = getTodayKey();
+        allServices = allServices.filter(s => !(s.barber === barberName && s.time === time && s.date === today));
+        saveServicesToStorage();
+        updateDashboard();
+        if(navFinanceiro && navFinanceiro.classList.contains('active')) updateFinanceiro();
+    }
+};
+
+window.startInlineEdit = function(id, barberName, time) {
+    editingServiceInModal = id;
+    openServiceDetails(barberName, time);
+};
+
+window.cancelInlineEdit = function(barberName, time) {
+    editingServiceInModal = null;
+    openServiceDetails(barberName, time);
+};
+
+window.updateInlinePrice = function(serviceId) {
+    const serviceObj = services.find(sc => sc.id === parseInt(serviceId));
+    if (serviceObj) {
+        document.getElementById('edit-inline-price').value = serviceObj.defaultPrice.toFixed(2);
+    }
+};
+
+window.saveInlineEdit = function(id, barberName, time) {
+    const serviceId = parseInt(document.getElementById('edit-inline-service').value);
+    const price = parseFloat(document.getElementById('edit-inline-price').value);
+    const serviceObj = services.find(sc => sc.id === serviceId);
+
+    const index = allServices.findIndex(s => s.id === id);
+    if (index !== -1 && serviceObj) {
+        allServices[index].serviceName = serviceObj.name;
+        allServices[index].price = price;
+        saveServicesToStorage();
+        editingServiceInModal = null;
+        updateDashboard();
+        openServiceDetails(barberName, time);
+    }
+};
+
+window.deleteServiceFromModal = function(id, barberName, time) {
+    if (confirm('Excluir este serviço?')) {
+        allServices = allServices.filter(s => s.id !== id);
+        saveServicesToStorage();
+        updateDashboard();
+        
+        // Verifica se ainda existem serviços no slot para manter o modal aberto ou fechar
+        const today = getTodayKey();
+        const remaining = allServices.filter(s => s.barber === barberName && s.time === time && s.date === today);
+        if (remaining.length > 0) {
+            openServiceDetails(barberName, time);
+        } else {
+            modalServiceDetails.style.display = 'none';
+        }
+    }
+};
 
 // Iniciar
 init();
