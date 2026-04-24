@@ -184,13 +184,10 @@ nav li a:hover, nav li.active a {
     position: relative;
 }
 
-.submenu-toggle {
-    justify-content: space-between !important;
-}
-
 .submenu-icon {
     font-size: 0.8rem;
     transition: transform 0.3s ease;
+    margin-left: auto; /* Empurra o ícone de seta para a direita */
 }
 
 .has-submenu.open .submenu-icon {
@@ -373,6 +370,7 @@ h3 {
     font-size: 1.2rem;
     border-bottom: 1px solid var(--border-color);
     padding-bottom: 10px;
+    text-align: center;
 }
 
 /* Form Styles */
@@ -608,14 +606,112 @@ td:last-child {
     font-weight: 600;
 }
 
-.badge-low {
-    background: rgba(231, 76, 60, 0.15);
-    color: #e74c3c;
+.badge-low { background: rgba(255, 68, 68, 0.2); color: #ff4444; }
+.badge-ok { background: rgba(0, 200, 81, 0.2); color: #00c851; }
+
+/* Multi-service styles */
+.selected-services-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 15px;
 }
 
-.badge-ok {
-    background: rgba(39, 174, 96, 0.15);
-    color: #27ae60;
+/* Settings / Config Styles */
+.config-section {
+    padding: 30px;
+}
+
+.inline-form {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 25px;
+    background: rgba(255, 255, 255, 0.03);
+    padding: 20px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+}
+
+.inline-form input {
+    flex: 1;
+}
+
+.inline-form button {
+    width: auto;
+    padding: 0 25px;
+}
+
+.service-config-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 15px;
+}
+
+.service-config-item {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 15px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.3s ease;
+}
+
+.service-config-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--primary-color);
+    transform: translateY(-2px);
+}
+
+.service-config-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.service-config-name {
+    font-weight: 600;
+    color: var(--text-main);
+}
+
+.service-config-price {
+    font-size: 0.9rem;
+    color: var(--primary-color);
+    font-weight: 700;
+}
+
+.selected-service-tag {
+    background: rgba(218, 165, 32, 0.2);
+    border: 1px solid var(--primary-color);
+    color: var(--primary-color);
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.selected-service-tag i {
+    cursor: pointer;
+    font-size: 0.75rem;
+}
+
+.selected-service-tag i:hover {
+    color: #ff4444;
+}
+
+.btn-add-service {
+    padding: 8px 12px;
+    font-size: 0.85rem;
+    margin-top: -10px;
+    margin-bottom: 20px;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.btn-add-service:hover {
+    background: rgba(255, 255, 255, 0.2);
 }
 
 /* Responsiveness */
