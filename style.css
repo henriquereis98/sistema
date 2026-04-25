@@ -884,11 +884,48 @@ td:last-child {
     }
 }
 
-/* --- Caixa (Bot\u00e3o Flutuante + Modal + Status Card) --- */
-.btn-caixa {
+/* --- Container de Ações Flutuantes --- */
+.floating-actions-container {
     position: fixed;
     bottom: 30px;
     right: 30px;
+    display: flex;
+    gap: 15px;
+    z-index: 100;
+}
+
+/* --- Caixa (Botão Flutuante + Modal + Status Card) --- */
+.btn-venda-flutuante {
+    background: #f39c12;
+    color: #fff;
+    border: none;
+    padding: 15px 25px;
+    border-radius: 50px;
+    font-family: var(--font-family);
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 6px 20px rgba(243, 156, 18, 0.4);
+    transition: all 0.3s ease;
+    animation: pulse-venda 2s infinite;
+}
+
+.btn-venda-flutuante:hover {
+    background: #e67e22;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(243, 156, 18, 0.5);
+}
+
+@keyframes pulse-venda {
+    0%, 100% { box-shadow: 0 6px 20px rgba(243, 156, 18, 0.4); }
+    50% { box-shadow: 0 6px 30px rgba(243, 156, 18, 0.7); }
+}
+
+
+.btn-caixa {
     background: #e74c3c;
     color: #fff;
     border: none;
@@ -903,7 +940,6 @@ td:last-child {
     gap: 10px;
     box-shadow: 0 6px 20px rgba(231, 76, 60, 0.4);
     transition: all 0.3s ease;
-    z-index: 100;
     animation: pulse-caixa 2s infinite;
 }
 
@@ -1139,9 +1175,13 @@ td:last-child {
         width: 100%;
         justify-content: space-between;
     }
-    .btn-caixa {
+    .floating-actions-container {
         bottom: 20px;
         right: 20px;
+        flex-direction: row;
+        gap: 10px;
+    }
+    .btn-venda-flutuante, .btn-caixa {
         padding: 12px 20px;
         font-size: 0.9rem;
     }
