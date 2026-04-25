@@ -134,9 +134,7 @@ const viewRelDesempenho = document.getElementById('view-rel-desempenho');
 const viewRelFaturamento = document.getElementById('view-rel-faturamento');
 const navEstoque = document.getElementById('nav-estoque');
 const viewEstoque = document.getElementById('view-estoque');
-const navVendas = document.getElementById('nav-vendas');
-const viewVendas = document.getElementById('view-vendas');
-const salesHistoryList = document.getElementById('sales-history-list');
+
 const pageTitle = document.getElementById('page-title');
 
 // Elementos do DOM - Dashboard
@@ -235,6 +233,14 @@ const caixaValServicos = document.getElementById('caixa-val-servicos');
 const caixaValTotal = document.getElementById('caixa-val-total');
 const btnFecharCaixa = document.getElementById('btn-fechar-caixa');
 const caixaBadge = document.getElementById('caixa-badge');
+
+// Elementos do DOM - Nova Venda (Modal)
+const btnVendaFlutuante = document.getElementById('btn-venda-flutuante');
+const modalNovaVenda = document.getElementById('modal-nova-venda');
+const modalNovaVendaClose = document.getElementById('modal-nova-venda-close');
+const modalSaleForm = document.getElementById('modal-sale-form');
+const modalSaleProductSelect = document.getElementById('modal-sale-product-select');
+
 // Inicialização
 function init() {
     loadFromLocalStorage();
@@ -357,7 +363,7 @@ function setupNavigation() {
     if (navFinanceiro) navFinanceiro.addEventListener('click', (e) => { e.preventDefault(); switchView('financeiro'); });
     if (navComissoes) navComissoes.addEventListener('click', (e) => { e.preventDefault(); switchView('comissoes'); });
     if (navConsumo) navConsumo.addEventListener('click', (e) => { e.preventDefault(); switchView('consumo'); });
-    if (navVendas) navVendas.addEventListener('click', (e) => { e.preventDefault(); switchView('vendas'); });
+
     if (navEstoque) navEstoque.addEventListener('click', (e) => { e.preventDefault(); switchView('estoque'); });
     
     // Submenu Toggles (Now handled by inline onclick in HTML)
@@ -382,7 +388,7 @@ function switchView(viewName) {
     if (navRelServicos) navRelServicos.classList.remove('active');
     if (navConfig) navConfig.classList.remove('active');
     if (navEstoque) navEstoque.classList.remove('active');
-    if (navVendas) navVendas.classList.remove('active');
+
     if (navGestaoBarbeiros) navGestaoBarbeiros.classList.remove('active');
     if (navGestaoServicos) navGestaoServicos.classList.remove('active');
     if (navGestaoUsuarios) navGestaoUsuarios.classList.remove('active');
@@ -396,17 +402,19 @@ function switchView(viewName) {
     if (viewConsumo) viewConsumo.style.display = 'none';
     if (viewRelCaixa) viewRelCaixa.style.display = 'none';
     if (viewRelServicos) viewRelServicos.style.display = 'none';
-    if (viewVendas) viewVendas.style.display = 'none';
+
     if (viewGestaoBarbeiros) viewGestaoBarbeiros.style.display = 'none';
     if (viewGestaoServicos) viewGestaoServicos.style.display = 'none';
     if (viewGestaoUsuarios) viewGestaoUsuarios.style.display = 'none';
     if (viewRelDesempenho) viewRelDesempenho.style.display = 'none';
     if (viewRelFaturamento) viewRelFaturamento.style.display = 'none';
     if (viewConfig) viewConfig.style.display = 'none';
+    if (btnVendaFlutuante) btnVendaFlutuante.style.display = 'none';
 
     if (viewName === 'dashboard') {
         if (navDashboard) navDashboard.classList.add('active');
         if (viewDashboard) viewDashboard.style.display = 'block';
+        if (btnVendaFlutuante) btnVendaFlutuante.style.display = 'flex';
         if (pageTitle) pageTitle.textContent = 'Dashboard do Dia';
         updateDashboard();
     } else if (viewName === 'financeiro') {
@@ -469,12 +477,7 @@ function switchView(viewName) {
         pageTitle.textContent = 'Gerenciar Estoque';
         renderInventory();
         populateProductSelect();
-    } else if (viewName === 'vendas') {
-        if (navVendas) navVendas.classList.add('active');
-        if (viewVendas) viewVendas.style.display = 'block';
-        pageTitle.textContent = 'Vendas e Produtos';
-        updateVendas();
-        populateProductSelect();
+
     }
 }
 
@@ -2103,42 +2106,69 @@ function setupEstoque() {
 
 // ---- Aba Vendas ----
 function setupVendas() {
-    const saleForm = document.getElementById('sale-form');
-    if (saleForm) {
-        saleForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const prodId = parseInt(document.getElementById('sale-product-select').value);
-            const qty = parseInt(document.getElementById('sale-qty').value);
-            const payment = document.getElementById('sale-payment').value;
 
-            const product = inventory.find(p => p.id === prodId);
-            if (!product) return;
-
-            if (product.stock < qty) {
-                alert('Estoque insuficiente!');
-                return;
-            }
-
-            product.stock -= qty;
-            const newSale = {
-                id: Date.now(),
-                productId: prodId,
-                productName: product.name,
-                price: product.price,
-                quantity: qty,
-                paymentMethod: payment,
-                date: getTodayKey()
-            };
-
-            productSales.unshift(newSale);
-            saveInventoryToStorage();
-            saveProductSalesToStorage();
-            
-            saleForm.reset();
-            updateVendas();
-            updateDashboard();
-            alert('Venda realizada com sucesso!');
+    if (btnVendaFlutuante) {
+        btnVendaFlutuante.addEventListener('click', () => {
+            populateProductSelect(); // Garante que o select do modal esteja atualizado
+            if (modalNovaVenda) modalNovaVenda.style.display = 'flex';
         });
+    }
+
+    if (modalNovaVendaClose) {
+        modalNovaVendaClose.addEventListener('click', () => {
+            if (modalNovaVenda) modalNovaVenda.style.display = 'none';
+        });
+    }
+
+    if (modalNovaVenda) {
+        modalNovaVenda.addEventListener('click', (e) => {
+            if (e.target === modalNovaVenda) modalNovaVenda.style.display = 'none';
+        });
+    }
+
+    if (modalSaleForm) {
+        modalSaleForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const success = processSaleFormSubmit('modal-sale-product-select', 'modal-sale-qty', 'modal-sale-payment', modalSaleForm);
+            if (success && modalNovaVenda) {
+                modalNovaVenda.style.display = 'none';
+            }
+        });
+    }
+
+    function processSaleFormSubmit(prodSelectId, qtyId, paymentId, formElement) {
+        const prodId = parseInt(document.getElementById(prodSelectId).value);
+        const qty = parseInt(document.getElementById(qtyId).value);
+        const payment = document.getElementById(paymentId).value;
+
+        const product = inventory.find(p => p.id === prodId);
+        if (!product) return false;
+
+        if (product.stock < qty) {
+            alert('Estoque insuficiente!');
+            return false;
+        }
+
+        product.stock -= qty;
+        const newSale = {
+            id: Date.now(),
+            productId: prodId,
+            productName: product.name,
+            price: product.price,
+            quantity: qty,
+            paymentMethod: payment,
+            date: getTodayKey()
+        };
+
+        productSales.unshift(newSale);
+        saveInventoryToStorage();
+        saveProductSalesToStorage();
+        
+        formElement.reset();
+        updateDashboard();
+        if(navFinanceiro && navFinanceiro.classList.contains('active')) updateFinanceiro();
+        alert('Venda realizada com sucesso!');
+        return true;
     }
 
     // Setup Vendas Filters
@@ -2148,76 +2178,7 @@ function setupVendas() {
     const endInput = document.getElementById('sale-date-end');
     const btnApply = document.getElementById('sale-btn-apply-filter');
 
-    chips.forEach(chip => {
-        chip.addEventListener('click', () => {
-            chips.forEach(c => c.classList.remove('active'));
-            chip.classList.add('active');
-            currentVendasPeriod = chip.dataset.salePeriod;
-
-            if (currentVendasPeriod === 'custom') {
-                customRange.style.display = 'flex';
-            } else {
-                customRange.style.display = 'none';
-                updateVendas();
-            }
-        });
-    });
-
-    if (btnApply) {
-        btnApply.addEventListener('click', () => {
-            if (startInput.value && endInput.value) {
-                updateVendas();
-            } else {
-                alert('Selecione as datas de início e fim.');
-            }
-        });
-    }
 }
-
-function updateVendas() {
-    const startInput = document.getElementById('sale-date-start');
-    const endInput = document.getElementById('sale-date-end');
-    const { start, end } = getDateRange(currentVendasPeriod, startInput, endInput);
-    
-    const filteredSales = productSales.filter(s => s.date >= start && s.date <= end);
-    renderSalesHistory(filteredSales);
-}
-
-function renderSalesHistory(salesList) {
-    if (!salesHistoryList) return;
-    salesHistoryList.innerHTML = '';
-
-    if (salesList.length === 0) {
-        salesHistoryList.innerHTML = '<tr><td colspan="6" class="empty-state">Nenhuma venda encontrada no período.</td></tr>';
-        return;
-    }
-
-    salesList.forEach(s => {
-        const total = s.price * s.quantity;
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td>${formatDateBR(s.date)}</td>
-            <td>${s.productName}</td>
-            <td>${s.quantity}</td>
-            <td>${s.paymentMethod}</td>
-            <td><strong>R$ ${total.toFixed(2).replace('.', ',')}</strong></td>
-            <td>
-                <button class="btn-icon delete" onclick="deleteSale(${s.id})"><i class="fa-solid fa-trash"></i></button>
-            </td>
-        `;
-        salesHistoryList.appendChild(tr);
-    });
-}
-
-window.deleteSale = function(id) {
-    if (confirm('Deseja excluir este registro de venda? O estoque não será devolvido automaticamente.')) {
-        productSales = productSales.filter(s => s.id !== id);
-        saveProductSalesToStorage();
-        updateVendas();
-        updateDashboard();
-        if (navFinanceiro && navFinanceiro.classList.contains('active')) updateFinanceiro();
-    }
-};
 
 function renderInventory() {
     const list = document.getElementById('inventory-list');
@@ -2294,12 +2255,14 @@ if (editProductForm) {
 function populateProductSelect() {
     const select = document.getElementById('sale-product-select');
     const consumoSelect = document.getElementById('consumo-product-select');
+    const modalSelect = document.getElementById('modal-sale-product-select');
     
     const options = inventory.map(p => `<option value="${p.id}">${p.name} (Estoque: ${p.stock})</option>`).join('');
     const defaultOption = '<option value="" disabled selected>Selecione o produto</option>';
 
     if (select) select.innerHTML = defaultOption + options;
     if (consumoSelect) consumoSelect.innerHTML = defaultOption + options;
+    if (modalSelect) modalSelect.innerHTML = defaultOption + options;
 }
 
 window.deleteProduct = function(id) {
