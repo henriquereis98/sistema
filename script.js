@@ -1,21 +1,40 @@
-// Dados Padrão
+// Configuração Supabase
+const SUPABASE_URL = 'https://cdxinqkxeldhwjkxewix.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_xDdX6gLJNfepejiEcbs7tA_Y7BWID0E';
+let supabaseClient = null;
+let currentTenantId = null;
+let currentUser = null; // Unificando para manter compatibilidade com o resto do código
+
+// Inicializa o Supabase apenas quando a biblioteca estiver disponível
+function initSupabase() {
+    try {
+        if (typeof supabase === 'undefined') {
+            console.error('Erro: Biblioteca Supabase não encontrada. Verifique sua conexão com a internet.');
+            return false;
+        }
+        supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        return true;
+    } catch (e) {
+        console.error('Erro ao inicializar Supabase:', e);
+        return false;
+    }
+}
+
+
+// Dados Padrão (Serão substituídos por dados do banco)
 const defaultBarbers = [
     { id: 1, name: 'João' },
     { id: 2, name: 'Marcos' },
     { id: 3, name: 'Pedro' }
 ];
 
-let services = JSON.parse(localStorage.getItem('barbearia_ze_service_configs')) || [
-    { id: 1, name: 'Corte Social', defaultPrice: 35.00 },
-    { id: 2, name: 'Corte Degradê', defaultPrice: 45.00 },
-    { id: 3, name: 'Barba Terapia', defaultPrice: 30.00 },
-    { id: 4, name: 'Combo (Corte + Barba)', defaultPrice: 70.00 },
-    { id: 5, name: 'Sobrancelha', defaultPrice: 15.00 },
-    { id: 6, name: 'Pigmentação', defaultPrice: 25.00 }
-];
+let services = [];
 
-function saveServiceConfigsToStorage() {
-    localStorage.setItem('barbearia_ze_service_configs', JSON.stringify(services));
+
+async function saveServiceConfigsToStorage() {
+    // Agora salvamos no Supabase
+    if (!currentTenantId) return;
+    // Lógica será implementada nas funções específicas de insert/update
 }
 
 const defaultUsers = [
@@ -26,17 +45,16 @@ const defaultUsers = [
 let barbers = [];
 let allServices = [];
 let users = [];
-let currentUser = null;
 let currentReportPeriod = 'today';
 let currentRelCaixaPeriod = 'today';
 let currentRelServicosPeriod = 'today';
 let currentFinanceiroPeriod = 'today';
 let currentComissoesPeriod = 'today';
 let currentComissoesBarber = 'all';
-let cashHistory = JSON.parse(localStorage.getItem('barbearia_ze_cash_history')) || [];
-let allConsumption = JSON.parse(localStorage.getItem('barbearia_ze_consumption')) || [];
-let inventory = JSON.parse(localStorage.getItem('barbearia_ze_inventory')) || [];
-let productSales = JSON.parse(localStorage.getItem('barbearia_ze_product_sales')) || [];
+let cashHistory = [];
+let allConsumption = [];
+let inventory = [];
+let productSales = [];
 let currentVendasPeriod = 'today';
 let currentPerfPeriod = '7days';
 let currentFatPeriod = 'today';
@@ -242,29 +260,103 @@ const modalSaleForm = document.getElementById('modal-sale-form');
 const modalSaleProductSelect = document.getElementById('modal-sale-product-select');
 
 // Inicialização
-function init() {
-    loadFromLocalStorage();
-    
-    // Injeta usuários padrão se vazio
-    if (users.length === 0) {
-        users = [...defaultUsers];
-        saveUsersToStorage();
+async function init() {
+    console.log('Iniciando sistema...');
+    if (!initSupabase()) {
+        alert('Erro ao conectar com o servidor. Verifique sua conexão.');
+        return;
     }
     
-    if (barbers.length === 0) {
-        barbers = [...defaultBarbers];
-        saveBarbersToStorage();
-    }
-
-    checkAuth();
+    // Vincula o evento de login apenas após o Supabase estar pronto
+    setupLoginListener();
+    
+    await checkAuth();
 }
 
+function setupLoginListener() {
+    const loginForm = document.getElementById('login-form');
+    if (!loginForm) return;
+
+    loginForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        console.log('Tentativa de login iniciada...');
+        
+        const email = document.getElementById('login-username').value;
+        const pass = document.getElementById('login-password').value;
+        
+        if (!supabaseClient) {
+            alert('Erro: Conexão com o banco não inicializada.');
+            return;
+        }
+
+        try {
+            console.log('Chamando Supabase Auth...');
+            const { data, error } = await supabaseClient.auth.signInWithPassword({
+                email: email,
+                password: pass,
+            });
+            
+            if (error) {
+                console.error('Erro de autenticação:', error.message);
+                alert('Erro ao entrar: ' + error.message);
+                return;
+            }
+
+            if (data.user) {
+                console.log('Login Auth sucesso, buscando perfil...');
+                const { data: profile, error: profileError } = await supabaseClient
+                    .from('profiles')
+                    .select('*')
+                    .eq('id', data.user.id)
+                    .single();
+
+                if (!profileError && profile) {
+                    console.log('Perfil carregado:', profile.name);
+                    currentUser = {
+                        ...profile,
+                        id: data.user.id,
+                        email: data.user.email,
+                        username: profile.name
+                    };
+                    currentTenantId = profile.tenant_id;
+                    showApp();
+                } else {
+                    console.error('Erro de perfil:', profileError);
+                    alert('Usuário autenticado, mas perfil não encontrado. Verifique a tabela "profiles".');
+                }
+            }
+        } catch (err) {
+            console.error('Erro fatal no login:', err);
+            alert('Erro crítico: ' + err.message);
+        }
+    });
+}
+
+
 // ---- Autenticação ----
-function checkAuth() {
-    const session = sessionStorage.getItem('barbearia_logged_in');
+async function checkAuth() {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    
     if (session) {
-        currentUser = JSON.parse(session);
-        showApp();
+        // Busca o perfil para identificar a barbearia (tenant_id)
+        const { data: profile } = await supabaseClient
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+
+        if (profile) {
+            currentUser = {
+                ...profile,
+                id: session.user.id,
+                email: session.user.email,
+                username: profile.name
+            };
+            currentTenantId = profile.tenant_id;
+            showApp();
+        } else {
+            showLogin();
+        }
     } else {
         showLogin();
     }
@@ -275,13 +367,105 @@ function showLogin() {
     loginContainer.style.display = 'flex';
 }
 
-function showApp() {
+async function loadSupabaseData() {
+    if (!currentTenantId) return;
+
+    try {
+        const [
+            { data: barbersData },
+            { data: servicesData },
+            { data: inventoryData },
+            { data: appointmentsData },
+            { data: salesData },
+            { data: cashData },
+            { data: consumptionData }
+        ] = await Promise.all([
+            supabaseClient.from('barbers').select('*').eq('tenant_id', currentTenantId),
+            supabaseClient.from('services').select('*').eq('tenant_id', currentTenantId),
+            supabaseClient.from('inventory').select('*').eq('tenant_id', currentTenantId),
+            supabaseClient.from('appointments').select('*').eq('tenant_id', currentTenantId),
+            supabaseClient.from('product_sales').select('*').eq('tenant_id', currentTenantId),
+            supabaseClient.from('cash_history').select('*').eq('tenant_id', currentTenantId),
+            supabaseClient.from('consumption').select('*').eq('tenant_id', currentTenantId)
+        ]);
+
+        barbers = barbersData || [];
+        // Mapeia de 'price' no banco para 'defaultPrice' no JS
+        services = (servicesData || []).map(s => ({
+            id: s.id,
+            name: s.name,
+            defaultPrice: s.price
+        }));
+        inventory = (inventoryData || []).map(i => ({
+            id: i.id,
+            name: i.name,
+            price: i.price,
+            stock: i.stock // Usando 'stock' para bater com o renderInventory
+        }));
+        // Mapeia campos do banco para o formato esperado pelo JS
+        allServices = (appointmentsData || []).map(s => ({
+            id: s.id,
+            barber: s.barber_name, // O JS usa 'barber' ou 'barberName'
+            barberName: s.barber_name,
+            serviceName: s.service_name,
+            price: s.price,
+            time: s.time,
+            paymentMethod: s.payment_method,
+            date: s.date,
+            status: s.status
+        }));
+        productSales = (salesData || []).map(s => ({
+            id: s.id,
+            productName: s.product_name,
+            quantity: s.quantity,
+            price: s.price,
+            paymentMethod: s.payment_method,
+            date: s.date
+        }));
+        cashHistory = (cashData || []).map(c => ({
+            id: c.id,
+            date: c.date,
+            initialValue: c.initial_value,
+            finalValue: c.final_value,
+            status: c.status,
+            obs: c.obs
+        }));
+        allConsumption = (consumptionData || []).map(c => ({
+            id: c.id,
+            barber: c.barber_name,
+            barberName: c.barber_name,
+            productId: c.product_id,
+            productName: c.product_name,
+            price: c.price,
+            date: c.date
+        }));
+        // Atualiza a interface com os dados carregados
+        populateSelects();
+        populateProductSelect();
+        renderInventory();
+        renderBarbersList();
+        renderServicesList();
+        updateDashboard();
+        
+    } catch (err) {
+        console.error('Erro ao carregar dados do Supabase:', err);
+    }
+}
+
+async function showApp() {
     loginContainer.style.display = 'none';
     appContainer.style.display = 'flex';
-    
+
+    // Carrega os dados do Supabase antes de inicializar a lógica
+    await loadSupabaseData();
+
     // Setup Profile
-    currentUserName.textContent = currentUser.username.charAt(0).toUpperCase() + currentUser.username.slice(1);
-    currentUserAvatar.textContent = currentUser.username.charAt(0).toUpperCase();
+    if (currentUser) {
+        currentUserName.textContent = currentUser.name || currentUser.username;
+        currentUserAvatar.textContent = (currentUser.name || currentUser.username).charAt(0).toUpperCase();
+    }
+
+
 
     // Init App Logic
     displayCurrentDate();
@@ -302,30 +486,12 @@ function showApp() {
     setupFaturamentoFilters();
 }
 
-
-if (loginForm) {
-    loginForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const user = loginUsernameInput.value.trim().toLowerCase();
-        const pass = loginPasswordInput.value;
-
-        const validUser = users.find(u => u.username.toLowerCase() === user && u.password === pass);
-        
-        if (validUser) {
-            if (loginError) loginError.style.display = 'none';
-            currentUser = validUser;
-            sessionStorage.setItem('barbearia_logged_in', JSON.stringify(currentUser));
-            showApp();
-        } else {
-            if (loginError) loginError.style.display = 'block';
-        }
-    });
-}
-
 if (btnLogout) {
-    btnLogout.addEventListener('click', () => {
+    btnLogout.addEventListener('click', async () => {
+        await supabaseClient.auth.signOut();
         sessionStorage.removeItem('barbearia_logged_in');
         currentUser = null;
+        currentTenantId = null;
         loginUsernameInput.value = '';
         loginPasswordInput.value = '';
         showLogin();
@@ -441,6 +607,8 @@ function switchView(viewName) {
         if (navConsumo) navConsumo.classList.add('active');
         if (viewConsumo) viewConsumo.style.display = 'block';
         pageTitle.textContent = 'Consumo Interno';
+        populateSelects();
+        populateProductSelect();
         renderConsumoList();
     } else if (viewName === 'gestao-barbeiros') {
         if (navGestaoBarbeiros) navGestaoBarbeiros.classList.add('active');
@@ -596,7 +764,7 @@ if (serviceForm) {
         // Registra cada serviço da lista como uma entrada separada
         selectedServicesForNewEntry.forEach(s => {
             const newEntry = {
-                id: Date.now() + Math.random(),
+                id: Math.floor(Date.now() + Math.random() * 1000),
                 barber: barberName,
                 serviceName: s.name,
                 price: s.price,
@@ -608,7 +776,7 @@ if (serviceForm) {
             allServices.unshift(newEntry);
         });
 
-        saveServicesToStorage();
+        saveAppointmentsToStorage();
         updateDashboard();
         if(navFinanceiro && navFinanceiro.classList.contains('active')) updateFinanceiro();
         
@@ -701,10 +869,18 @@ function renderDailySchedule() {
     });
 }
 
-window.deleteService = function(id) {
+window.deleteService = async function(id) {
     if (confirm('Deseja excluir este serviço?')) {
+        // Remove do banco de dados
+        const { error } = await supabaseClient.from('appointments').delete().eq('id', Math.floor(id));
+        if (error) {
+            console.error('Erro ao deletar agendamento no Supabase:', error);
+            alert('Erro ao excluir: ' + error.message);
+            return;
+        }
+
         allServices = allServices.filter(s => s.id !== id);
-        saveServicesToStorage();
+        saveAppointmentsToStorage();
         updateDashboard();
         if(navFinanceiro && navFinanceiro.classList.contains('active')) updateFinanceiro();
         if(navRelCaixa && navRelCaixa.classList.contains('active')) updateReportsCaixa();
@@ -773,7 +949,7 @@ if (editServiceForm) {
             allServices[index].paymentMethod = document.getElementById('edit-payment-method').value;
             allServices[index].date = document.getElementById('edit-date-input').value;
 
-            saveServicesToStorage();
+            saveAppointmentsToStorage();
             document.getElementById('modal-edit-service').style.display = 'none';
             updateDashboard();
             if(navFinanceiro && navFinanceiro.classList.contains('active')) updateFinanceiro();
@@ -799,7 +975,7 @@ function setupConfigServices() {
             };
 
             services.push(newService);
-            saveServiceConfigsToStorage();
+            saveServicesToStorage();
             form.reset();
             renderServicesList();
             populateSelects();
@@ -834,10 +1010,18 @@ function renderServicesList() {
     });
 }
 
-window.deleteServiceConfig = function(id) {
+window.deleteServiceConfig = async function(id) {
     if (confirm('Deseja excluir este serviço?')) {
+        // Remove do banco de dados
+        const { error } = await supabaseClient.from('services').delete().eq('id', Math.floor(id));
+        if (error) {
+            console.error('Erro ao deletar configuração de serviço no Supabase:', error);
+            alert('Erro ao excluir: ' + error.message);
+            return;
+        }
+
         services = services.filter(s => s.id !== id);
-        saveServiceConfigsToStorage();
+        saveServicesToStorage();
         renderServicesList();
         populateSelects();
     }
@@ -877,8 +1061,8 @@ if (formEditConfigService) {
         s.name = newName;
         s.defaultPrice = newPrice;
         
-        saveServiceConfigsToStorage();
         saveServicesToStorage();
+        saveAppointmentsToStorage();
         renderServicesList();
         populateSelects();
         updateDashboard();
@@ -1131,7 +1315,7 @@ function setupConsumo() {
     }
 
     if (consumoForm) {
-        consumoForm.addEventListener('submit', (e) => {
+        consumoForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const barber = consumoBarberSelect.value;
             const product = consumoProductSelect.value;
@@ -1158,7 +1342,7 @@ function setupConsumo() {
 
             // Baixa no estoque
             inventoryItem.stock--;
-            saveInventoryToStorage();
+            await saveInventoryToStorage();
 
             const newConsumo = {
                 id: Date.now(),
@@ -1170,7 +1354,7 @@ function setupConsumo() {
             };
 
             allConsumption.unshift(newConsumo);
-            localStorage.setItem('barbearia_ze_consumption', JSON.stringify(allConsumption));
+            await saveConsumoToStorage();
             
             consumoForm.reset();
             renderConsumoList();
@@ -1216,8 +1400,16 @@ function renderConsumoList() {
     });
 }
 
-window.deleteConsumo = function(id) {
+window.deleteConsumo = async function(id) {
     if (confirm('Deseja excluir este lançamento? O item voltará para o estoque.')) {
+        // Remove do banco de dados
+        const { error } = await supabaseClient.from('consumption').delete().eq('id', Math.floor(id));
+        if (error) {
+            console.error('Erro ao deletar consumo no Supabase:', error);
+            alert('Erro ao excluir: ' + error.message);
+            return;
+        }
+
         const item = allConsumption.find(c => c.id === id);
         if (item && item.productId) {
             const inventoryItem = inventory.find(p => p.id === item.productId);
@@ -1228,13 +1420,13 @@ window.deleteConsumo = function(id) {
         }
 
         allConsumption = allConsumption.filter(c => c.id !== id);
-        localStorage.setItem('barbearia_ze_consumption', JSON.stringify(allConsumption));
+        saveConsumoToStorage();
         renderConsumoList();
         renderInventory();
         populateProductSelect();
         alert('Lançamento excluído e estoque devolvido.');
     }
-}
+};
 
 // ---- Aba Barbeiros ----
 if (barberForm) {
@@ -1251,8 +1443,16 @@ if (barberForm) {
     });
 }
 
-function deleteBarber(id) {
+async function deleteBarber(id) {
     if(confirm('Remover este barbeiro?')) {
+        // Remove do banco de dados
+        const { error } = await supabaseClient.from('barbers').delete().eq('id', Math.floor(id));
+        if (error) {
+            console.error('Erro ao deletar barbeiro no Supabase:', error);
+            alert('Erro ao excluir: ' + error.message);
+            return;
+        }
+
         barbers = barbers.filter(b => b.id !== id);
         saveBarbersToStorage();
         renderBarbersList();
@@ -1300,8 +1500,8 @@ if (formEditConfigBarber) {
         b.name = newName;
         
         saveBarbersToStorage();
-        saveServicesToStorage();
-        localStorage.setItem('barbearia_ze_consumption', JSON.stringify(allConsumption));
+        saveAppointmentsToStorage();
+        saveConsumoToStorage();
         
         renderBarbersList();
         populateSelects();
@@ -1460,8 +1660,16 @@ function renderCashHistory(start, end) {
     });
 }
 
-window.deleteCashHistory = function(id) {
+window.deleteCashHistory = async function(id) {
     if (confirm('Tem certeza que deseja excluir o histórico deste caixa? Essa ação não pode ser desfeita.')) {
+        // Remove do banco de dados
+        const { error } = await supabaseClient.from('cash_history').delete().eq('id', Math.floor(id));
+        if (error) {
+            console.error('Erro ao deletar histórico de caixa no Supabase:', error);
+            alert('Erro ao excluir: ' + error.message);
+            return;
+        }
+
         cashHistory = cashHistory.filter(c => c.id !== id);
         saveCashRegisterToStorage();
         
@@ -1624,7 +1832,7 @@ if (newUserForm) {
     });
 }
 
-function deleteUser(id) {
+async function deleteUser(id) {
     const userToDelete = users.find(u => u.id === id);
     if (!userToDelete) return;
     
@@ -1639,6 +1847,14 @@ function deleteUser(id) {
     }
     
     if(confirm('Tem certeza que deseja remover este acesso?')) {
+        // Remove do banco de dados (tabela profiles)
+        const { error } = await supabaseClient.from('profiles').delete().eq('id', userToDelete.id);
+        if (error) {
+            console.error('Erro ao deletar usuário no Supabase:', error);
+            alert('Erro ao excluir: ' + error.message);
+            return;
+        }
+
         users = users.filter(u => u.id !== id);
         saveUsersToStorage();
         renderUsersList();
@@ -1730,61 +1946,134 @@ function renderUsersList() {
 }
 
 // ---- Local Storage ----
-function saveServicesToStorage() { localStorage.setItem('barbearia_ze_services', JSON.stringify(allServices)); }
-function saveBarbersToStorage() { localStorage.setItem('barbearia_ze_barbers', JSON.stringify(barbers)); }
-function saveUsersToStorage() { localStorage.setItem('barbearia_ze_users', JSON.stringify(users)); }
-function saveCashRegisterToStorage() { localStorage.setItem('barbearia_ze_cash_history', JSON.stringify(cashHistory)); }
-function saveInventoryToStorage() { localStorage.setItem('barbearia_ze_inventory', JSON.stringify(inventory)); }
-function saveProductSalesToStorage() { localStorage.setItem('barbearia_ze_product_sales', JSON.stringify(productSales)); }
+async function saveAppointmentsToStorage() { 
+    if (!currentTenantId) return;
+    // Traduz do JS para o Banco de Dados e garante ID inteiro + busca IDs reais
+    const dbData = allServices.map(s => {
+        const barberObj = barbers.find(b => b.name === (s.barber || s.barberName));
+        const serviceObj = services.find(sv => sv.name === s.serviceName);
+        
+        return {
+            id: Math.floor(s.id),
+            tenant_id: currentTenantId,
+            barber_id: barberObj ? barberObj.id : null,
+            service_id: serviceObj ? serviceObj.id : null,
+            barber_name: s.barber || s.barberName,
+            service_name: s.serviceName,
+            price: s.price,
+            time: s.time,
+            payment_method: s.paymentMethod,
+            date: s.date,
+            status: s.status
+        };
+    });
+    
+    const { error } = await supabaseClient.from('appointments').upsert(dbData);
+    if (error) {
+        console.error('Erro ao salvar agendamentos no Supabase:', error);
+        alert('Erro ao salvar agendamento: ' + error.message);
+    }
+}
+
+async function saveServicesToStorage() { 
+    if (!currentTenantId) return;
+    // Traduz defaultPrice para 'price' no banco e garante ID inteiro
+    const dbData = services.map(s => ({
+        id: Math.floor(s.id),
+        tenant_id: currentTenantId,
+        name: s.name,
+        price: s.defaultPrice
+    }));
+    
+    const { error } = await supabaseClient.from('services').upsert(dbData);
+    if (error) {
+        console.error('Erro ao salvar configuração de serviços no Supabase:', error);
+        alert('Erro ao salvar serviço: ' + error.message);
+    }
+}
+
+async function saveBarbersToStorage() { 
+    if (!currentTenantId) return;
+    const dbData = barbers.map(b => ({
+        id: Math.floor(b.id),
+        tenant_id: currentTenantId,
+        name: b.name
+    }));
+    const { error } = await supabaseClient.from('barbers').upsert(dbData);
+    if (error) console.error('Erro ao salvar barbeiros no Supabase:', error);
+}
+
+async function saveUsersToStorage() { 
+    // Usuários agora são gerenciados pelo Supabase Auth/Profiles. 
+    // Manteremos essa função vazia por enquanto para não quebrar chamadas legadas.
+}
+
+async function saveCashRegisterToStorage() { 
+    if (!currentTenantId) return;
+    const dbData = cashHistory.map(c => ({
+        id: Math.floor(c.id),
+        tenant_id: currentTenantId,
+        date: c.date,
+        initial_value: c.initialValue,
+        final_value: c.finalValue,
+        status: c.status,
+        obs: c.obs
+    }));
+    const { error } = await supabaseClient.from('cash_history').upsert(dbData);
+    if (error) console.error('Erro ao salvar caixa no Supabase:', error);
+}
+
+async function saveInventoryToStorage() { 
+    if (!currentTenantId) return;
+    const dbData = inventory.map(i => ({
+        id: Math.floor(i.id),
+        tenant_id: currentTenantId,
+        name: i.name,
+        price: i.price,
+        stock: i.stock // Usando 'stock' para bater com o resto do código
+    }));
+    const { error } = await supabaseClient.from('inventory').upsert(dbData);
+    if (error) console.error('Erro ao salvar estoque no Supabase:', error);
+}
+
+async function saveProductSalesToStorage() { 
+    if (!currentTenantId) return;
+    const dbData = productSales.map(s => {
+        const productObj = inventory.find(p => p.name === s.productName);
+        return {
+            id: Math.floor(s.id),
+            tenant_id: currentTenantId,
+            product_id: productObj ? productObj.id : null,
+            product_name: s.productName,
+            quantity: s.quantity,
+            price: s.price,
+            payment_method: s.paymentMethod,
+            date: s.date
+        };
+    });
+    const { error } = await supabaseClient.from('product_sales').upsert(dbData);
+    if (error) console.error('Erro ao salvar vendas no Supabase:', error);
+}
+
+async function saveConsumoToStorage() { 
+    if (!currentTenantId) return;
+    const dbData = allConsumption.map(c => ({
+        id: Math.floor(c.id),
+        tenant_id: currentTenantId,
+        product_id: c.productId,
+        product_name: c.productName,
+        barber_name: c.barber || c.barberName,
+        price: c.price,
+        quantity: 1,
+        date: c.date
+    }));
+    const { error } = await supabaseClient.from('consumption').upsert(dbData);
+    if (error) console.error('Erro ao salvar consumo no Supabase:', error);
+}
+
 
 function loadFromLocalStorage() {
-    const savedServices = localStorage.getItem('barbearia_ze_services');
-    if (savedServices) {
-        try {
-            allServices = JSON.parse(savedServices);
-            
-            // Filtro de segurança: remove entradas que não são de atendimento (migração/erro de colisão)
-            if (Array.isArray(allServices)) {
-                allServices = allServices.filter(s => s.barber || s.barberName || s.serviceName);
-            } else {
-                allServices = [];
-            }
-
-            // Migração: adiciona campo date e status para entradas antigas
-            const today = getTodayKey();
-            allServices = allServices.map(s => {
-                if (!s.date) s.date = today;
-                if (!s.status) s.status = 'concluido';
-                return s;
-            });
-            saveServicesToStorage();
-        } catch(e) {}
-    }
-
-    const savedBarbers = localStorage.getItem('barbearia_ze_barbers');
-    if (savedBarbers) { try { barbers = JSON.parse(savedBarbers); } catch(e) {} }
-    
-    const savedUsers = localStorage.getItem('barbearia_ze_users');
-    if (savedUsers) { try { users = JSON.parse(savedUsers); } catch(e) {} }
-
-    const savedCash = localStorage.getItem('barbearia_ze_cash'); // Legacy migration
-    const savedCashHistory = localStorage.getItem('barbearia_ze_cash_history');
-    
-    if (savedCashHistory) {
-        try { cashHistory = JSON.parse(savedCashHistory); } catch(e) {}
-    } else if (savedCash) {
-        // Migrate old object to array
-        try { 
-            const oldCash = JSON.parse(savedCash); 
-            if (oldCash) {
-                oldCash.id = Date.now();
-                oldCash.status = 'aberto';
-                cashHistory.push(oldCash);
-                saveCashRegisterToStorage();
-                localStorage.removeItem('barbearia_ze_cash');
-            }
-        } catch(e) {}
-    }
+    // Esta função não é mais necessária, pois usamos o Supabase
 }
 
 // ---- Backup (Exportar/Importar) ----
@@ -1877,7 +2166,7 @@ importFileInput.addEventListener('change', (e) => {
                 cashHistory = [];
             }
 
-            saveServiceConfigsToStorage();
+            saveServicesToStorage();
             saveBarbersToStorage();
             saveUsersToStorage();
             saveCashRegisterToStorage();
@@ -1916,9 +2205,9 @@ if (btnClearFinancial) {
 
         // Salva estados vazios
         saveServicesToStorage();
-        saveServiceConfigsToStorage();
+        saveServicesToStorage();
         saveCashRegisterToStorage();
-        localStorage.setItem('barbearia_ze_consumption', JSON.stringify(allConsumption));
+        saveConsumoToStorage();
         saveProductSalesToStorage();
 
         // Atualiza Interface
@@ -2091,9 +2380,14 @@ function setupEstoque() {
             e.preventDefault();
             const name = document.getElementById('prod-name').value;
             const price = parseFloat(document.getElementById('prod-price').value);
-            const stock = parseInt(document.getElementById('prod-stock').value);
+            const stock = parseInt(document.getElementById('prod-stock').value) || 0;
 
-            const newProduct = { id: Date.now(), name, price, stock };
+            const newProduct = { 
+                id: Math.floor(Date.now() + Math.random() * 1000), 
+                name, 
+                price, 
+                stock 
+            };
             inventory.push(newProduct);
             saveInventoryToStorage();
             productForm.reset();
@@ -2236,7 +2530,7 @@ if (editProductForm) {
         const id = parseInt(document.getElementById('edit-prod-id').value);
         const name = document.getElementById('edit-prod-name').value;
         const price = parseFloat(document.getElementById('edit-prod-price').value);
-        const stock = parseInt(document.getElementById('edit-prod-stock').value);
+        const stock = parseInt(document.getElementById('edit-prod-stock').value) || 0;
 
         const product = inventory.find(p => p.id === id);
         if (product) {
@@ -2265,8 +2559,16 @@ function populateProductSelect() {
     if (modalSelect) modalSelect.innerHTML = defaultOption + options;
 }
 
-window.deleteProduct = function(id) {
+window.deleteProduct = async function(id) {
     if (confirm('Remover produto do estoque?')) {
+        // Remove do banco de dados
+        const { error } = await supabaseClient.from('inventory').delete().eq('id', Math.floor(id));
+        if (error) {
+            console.error('Erro ao deletar produto no Supabase:', error);
+            alert('Erro ao excluir: ' + error.message);
+            return;
+        }
+
         inventory = inventory.filter(p => p.id !== id);
         saveInventoryToStorage();
         renderInventory();
@@ -2672,7 +2974,7 @@ window.confirmServiceInSlot = function(barberName, time) {
             s.status = 'concluido';
         }
     });
-    saveServicesToStorage();
+    saveAppointmentsToStorage();
     modalServiceDetails.style.display = 'none';
     updateDashboard();
     if(navFinanceiro && navFinanceiro.classList.contains('active')) updateFinanceiro();
@@ -2698,7 +3000,7 @@ window.saveNewInlineService = function(barberName, time) {
     const paymentMethod = existing ? existing.paymentMethod : 'Dinheiro';
     
     const newEntry = {
-        id: Date.now() + Math.random(),
+        id: Math.floor(Date.now() + Math.random() * 1000),
         barber: barberName,
         serviceName: serviceObj.name,
         price: price,
@@ -2709,18 +3011,33 @@ window.saveNewInlineService = function(barberName, time) {
     };
     
     allServices.push(newEntry);
-    saveServicesToStorage();
+    saveAppointmentsToStorage();
     updateDashboard();
     if(navFinanceiro && navFinanceiro.classList.contains('active')) updateFinanceiro();
     openServiceDetails(barberName, time); // Reabre o modal atualizado
 };
 
 
-window.deleteServiceInSlot = function(barberName, time) {
+window.deleteServiceInSlot = async function(barberName, time) {
     if (confirm(`Excluir todos os serviços deste horário para ${barberName}?`)) {
         const today = getTodayKey();
+        
+        // Busca os serviços que serão excluídos para pegar os IDs
+        const toDelete = allServices.filter(s => s.barber === barberName && s.time === time && s.date === today);
+        const idsToDelete = toDelete.map(s => Math.floor(s.id));
+
+        if (idsToDelete.length > 0) {
+            // Remove do banco de dados
+            const { error } = await supabaseClient.from('appointments').delete().in('id', idsToDelete);
+            if (error) {
+                console.error('Erro ao deletar agendamentos no Supabase:', error);
+                alert('Erro ao excluir: ' + error.message);
+                return;
+            }
+        }
+
         allServices = allServices.filter(s => !(s.barber === barberName && s.time === time && s.date === today));
-        saveServicesToStorage();
+        saveAppointmentsToStorage();
         updateDashboard();
         if(navFinanceiro && navFinanceiro.classList.contains('active')) updateFinanceiro();
     }
@@ -2752,17 +3069,25 @@ window.saveInlineEdit = function(id, barberName, time) {
     if (index !== -1 && serviceObj) {
         allServices[index].serviceName = serviceObj.name;
         allServices[index].price = price;
-        saveServicesToStorage();
+        saveAppointmentsToStorage();
         editingServiceInModal = null;
         updateDashboard();
         openServiceDetails(barberName, time);
     }
 };
 
-window.deleteServiceFromModal = function(id, barberName, time) {
+window.deleteServiceFromModal = async function(id, barberName, time) {
     if (confirm('Excluir este serviço?')) {
+        // Remove do banco de dados
+        const { error } = await supabaseClient.from('appointments').delete().eq('id', Math.floor(id));
+        if (error) {
+            console.error('Erro ao deletar agendamento no Supabase:', error);
+            alert('Erro ao excluir: ' + error.message);
+            return;
+        }
+
         allServices = allServices.filter(s => s.id !== id);
-        saveServicesToStorage();
+        saveAppointmentsToStorage();
         updateDashboard();
         
         // Verifica se ainda existem serviços no slot para manter o modal aberto ou fechar
