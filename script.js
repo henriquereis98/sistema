@@ -5,14 +5,19 @@ let supabaseClient = null;
 let currentTenantId = null;
 let currentUser = null; // Unificando para manter compatibilidade com o resto do código
 
-// Inicializa o Supabase apenas quando a biblioteca estiver disponível
+// Inicializa o Supabase com persistência de sessão apenas na aba (sessionStorage)
 function initSupabase() {
     try {
         if (typeof supabase === 'undefined') {
             console.error('Erro: Biblioteca Supabase não encontrada. Verifique sua conexão com a internet.');
             return false;
         }
-        supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+            auth: {
+                persistSession: true,
+                storage: window.sessionStorage
+            }
+        });
         return true;
     } catch (e) {
         console.error('Erro ao inicializar Supabase:', e);
@@ -37,9 +42,6 @@ async function saveServiceConfigsToStorage() {
     // Lógica será implementada nas funções específicas de insert/update
 }
 
-const defaultUsers = [
-    { id: 1, username: 'guilherme', password: '123' }
-];
 
 // Estado da Aplicação
 let barbers = [];
@@ -62,6 +64,9 @@ let currentFatType = 'total';
 let dashboardChart = null;
 let performanceReportChart = null;
 let selectedServicesForNewEntry = [];
+let caixaValuesVisible = false;
+let cashReleasePassword = '1204'; // Valor padrão que será atualizado pelo banco
+let relatoriosUnlocked = false; // Controla o acesso à aba de Relatórios
 
 // ---- Helpers de Data ----
 function getTodayKey() {
@@ -113,6 +118,77 @@ function getDateRange(period, startInput, endInput) {
     }
 }
 
+// ---- Utilitários de UI (Toasts e Modais) ----
+function showToast(message, type = 'info') {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    
+    let icon = 'fa-info-circle';
+    if (type === 'success') icon = 'fa-check-circle';
+    if (type === 'error') icon = 'fa-exclamation-circle';
+
+    toast.innerHTML = `
+        <i class="fa-solid ${icon}"></i>
+        <span>${message}</span>
+    `;
+
+    container.appendChild(toast);
+
+    // Auto-remove após 4 segundos
+    const timeout = setTimeout(() => {
+        toast.classList.add('fade-out');
+        toast.addEventListener('animationend', () => toast.remove());
+    }, 4000);
+
+    // Clique para remover
+    toast.onclick = () => {
+        clearTimeout(timeout);
+        toast.classList.add('fade-out');
+        toast.addEventListener('animationend', () => toast.remove());
+    };
+}
+
+let btnConfirmOk = document.getElementById('modal-confirm-ok');
+let btnConfirmCancel = document.getElementById('modal-confirm-cancel');
+
+function showConfirm(title, message, onConfirm, onCancel = null) {
+    const modal = document.getElementById('modal-confirm');
+    const titleEl = document.getElementById('modal-confirm-title');
+    const messageEl = document.getElementById('modal-confirm-message');
+
+    if (!modal || !titleEl || !messageEl) return;
+
+    titleEl.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> ${title}`;
+    messageEl.textContent = message;
+
+    // Remove listeners antigos clonando os botões
+    const newOk = btnConfirmOk.cloneNode(true);
+    const newCancel = btnConfirmCancel.cloneNode(true);
+    btnConfirmOk.parentNode.replaceChild(newOk, btnConfirmOk);
+    btnConfirmCancel.parentNode.replaceChild(newCancel, btnConfirmCancel);
+    
+    btnConfirmOk = newOk;
+    btnConfirmCancel = newCancel;
+
+    btnConfirmOk.onclick = () => {
+        modal.style.display = 'none';
+        modal.classList.remove('active');
+        if (onConfirm) onConfirm();
+    };
+
+    btnConfirmCancel.onclick = () => {
+        modal.style.display = 'none';
+        modal.classList.remove('active');
+        if (onCancel) onCancel();
+    };
+
+    modal.style.display = 'flex';
+    setTimeout(() => modal.classList.add('active'), 10);
+}
+
 // Elementos do DOM - Auth
 const loginContainer = document.getElementById('login-container');
 const appContainer = document.getElementById('app-container');
@@ -146,6 +222,13 @@ const viewConfig = document.getElementById('view-configuracoes');
 const viewRelCaixa = document.getElementById('view-rel-caixa');
 const viewRelServicos = document.getElementById('view-rel-servicos');
 const viewGestaoBarbeiros = document.getElementById('view-gestao-barbeiros');
+
+// Novos elementos para liberação de caixa
+const btnToggleCaixaValues = document.getElementById('btn-toggle-caixa-values');
+const modalLiberarCaixa = document.getElementById('modal-liberar-caixa');
+const modalLiberarCaixaClose = document.getElementById('modal-liberar-caixa-close');
+const formLiberarCaixa = document.getElementById('form-liberar-caixa');
+const inputUnlockPassword = document.getElementById('caixa-unlock-password');
 const viewGestaoServicos = document.getElementById('view-gestao-servicos');
 const viewGestaoUsuarios = document.getElementById('view-gestao-usuarios');
 const viewRelDesempenho = document.getElementById('view-rel-desempenho');
@@ -263,13 +346,13 @@ const modalSaleProductSelect = document.getElementById('modal-sale-product-selec
 async function init() {
     console.log('Iniciando sistema...');
     if (!initSupabase()) {
-        alert('Erro ao conectar com o servidor. Verifique sua conexão.');
+        showToast('Erro ao conectar com o servidor. Verifique sua conexão.', 'error');
         return;
     }
-    
+
     // Vincula o evento de login apenas após o Supabase estar pronto
     setupLoginListener();
-    
+
     await checkAuth();
 }
 
@@ -280,12 +363,12 @@ function setupLoginListener() {
     loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         console.log('Tentativa de login iniciada...');
-        
+
         const email = document.getElementById('login-username').value;
         const pass = document.getElementById('login-password').value;
-        
+
         if (!supabaseClient) {
-            alert('Erro: Conexão com o banco não inicializada.');
+            showToast('Erro: Conexão com o banco não inicializada.', 'error');
             return;
         }
 
@@ -295,10 +378,10 @@ function setupLoginListener() {
                 email: email,
                 password: pass,
             });
-            
+
             if (error) {
                 console.error('Erro de autenticação:', error.message);
-                alert('Erro ao entrar: ' + error.message);
+                showToast('Erro ao entrar: ' + error.message, 'error');
                 return;
             }
 
@@ -319,15 +402,26 @@ function setupLoginListener() {
                         username: profile.name
                     };
                     currentTenantId = profile.tenant_id;
-                    showApp();
+
+                    // Busca a senha de liberação do banco
+                    await fetchCashReleasePassword();
+
+                    // Mostra o loading ao logar
+                    showInitialLoading();
+
+                    // Pequeno delay para o usuário ver o "Carregando" antes de entrar
+                    setTimeout(() => {
+                        showApp();
+                        hideInitialLoading(500); // Esconde após o app estar pronto
+                    }, 2000);
                 } else {
                     console.error('Erro de perfil:', profileError);
-                    alert('Usuário autenticado, mas perfil não encontrado. Verifique a tabela "profiles".');
+                    showToast('Usuário autenticado, mas perfil não encontrado.', 'error');
                 }
             }
         } catch (err) {
             console.error('Erro fatal no login:', err);
-            alert('Erro crítico: ' + err.message);
+            showToast('Erro crítico: ' + err.message, 'error');
         }
     });
 }
@@ -336,7 +430,7 @@ function setupLoginListener() {
 // ---- Autenticação ----
 async function checkAuth() {
     const { data: { session } } = await supabaseClient.auth.getSession();
-    
+
     if (session) {
         // Busca o perfil para identificar a barbearia (tenant_id)
         const { data: profile } = await supabaseClient
@@ -353,6 +447,10 @@ async function checkAuth() {
                 username: profile.name
             };
             currentTenantId = profile.tenant_id;
+
+            // Busca a senha de liberação do banco
+            await fetchCashReleasePassword();
+
             showApp();
         } else {
             showLogin();
@@ -360,6 +458,44 @@ async function checkAuth() {
     } else {
         showLogin();
     }
+}
+
+async function fetchCashReleasePassword() {
+    if (!supabaseClient || !currentTenantId) return;
+    try {
+        const { data, error } = await supabaseClient
+            .from('tenants')
+            .select('cash_release_password')
+            .eq('id', currentTenantId)
+            .single();
+
+        if (!error && data) {
+            cashReleasePassword = data.cash_release_password;
+            console.log('Senha de liberação carregada com sucesso.');
+        }
+    } catch (err) {
+        console.error('Erro ao buscar senha de liberação:', err);
+    }
+}
+
+function showInitialLoading() {
+    const loader = document.getElementById('initial-loading');
+    if (loader) {
+        loader.style.display = 'flex';
+        loader.style.opacity = '1';
+    }
+}
+
+function hideInitialLoading(delay = 0) {
+    setTimeout(() => {
+        const loader = document.getElementById('initial-loading');
+        if (loader) {
+            loader.style.opacity = '0';
+            setTimeout(() => {
+                loader.style.display = 'none';
+            }, 500);
+        }
+    }, delay);
 }
 
 function showLogin() {
@@ -427,7 +563,10 @@ async function loadSupabaseData() {
             date: c.date,
             initialValue: c.initial_value,
             finalValue: c.final_value,
+            servicesValue: c.services_value,
             status: c.status,
+            openedAt: c.opened_at,
+            closedAt: c.closed_at,
             obs: c.obs
         }));
         allConsumption = (consumptionData || []).map(c => ({
@@ -446,7 +585,7 @@ async function loadSupabaseData() {
         renderBarbersList();
         renderServicesList();
         updateDashboard();
-        
+
     } catch (err) {
         console.error('Erro ao carregar dados do Supabase:', err);
     }
@@ -478,6 +617,7 @@ async function showApp() {
     setupComissoesFilters();
     setupConsumo();
     setupCaixa();
+    setupRelatoriosUnlock(); // Deve ser após setupCaixa para o form existir
     setupEstoque();
     setupVendas();
     setupMultiService();
@@ -489,7 +629,6 @@ async function showApp() {
 if (btnLogout) {
     btnLogout.addEventListener('click', async () => {
         await supabaseClient.auth.signOut();
-        sessionStorage.removeItem('barbearia_logged_in');
         currentUser = null;
         currentTenantId = null;
         loginUsernameInput.value = '';
@@ -508,41 +647,44 @@ function displayCurrentDate() {
 
 function startTimeTicker() {
     if (!currentTimeEl) return;
-    
+
     function updateTime() {
         const now = new Date();
-        currentTimeEl.textContent = now.toLocaleTimeString('pt-BR', { 
+        currentTimeEl.textContent = now.toLocaleTimeString('pt-BR', {
             timeZone: 'America/Sao_Paulo',
             hour: '2-digit',
             minute: '2-digit',
             second: '2-digit'
         });
     }
-    
+
     updateTime(); // initial call
     setInterval(updateTime, 1000);
 }
 
 // ---- Navegação ----
 function setupNavigation() {
-    if (navDashboard) navDashboard.addEventListener('click', (e) => { e.preventDefault(); switchView('dashboard'); });
-    if (navFinanceiro) navFinanceiro.addEventListener('click', (e) => { e.preventDefault(); switchView('financeiro'); });
-    if (navComissoes) navComissoes.addEventListener('click', (e) => { e.preventDefault(); switchView('comissoes'); });
-    if (navConsumo) navConsumo.addEventListener('click', (e) => { e.preventDefault(); switchView('consumo'); });
+    // Navegação no dashboard, estoque, financeiro — revogam o acesso a relatórios
+    if (navDashboard) navDashboard.addEventListener('click', (e) => { e.preventDefault(); lockRelatorios(); switchView('dashboard'); });
+    if (navFinanceiro) navFinanceiro.addEventListener('click', (e) => { e.preventDefault(); lockRelatorios(); switchView('financeiro'); });
+    if (navComissoes) navComissoes.addEventListener('click', (e) => { e.preventDefault(); lockRelatorios(); switchView('comissoes'); });
+    if (navConsumo) navConsumo.addEventListener('click', (e) => { e.preventDefault(); lockRelatorios(); switchView('consumo'); });
 
-    if (navEstoque) navEstoque.addEventListener('click', (e) => { e.preventDefault(); switchView('estoque'); });
-    
+    if (navEstoque) navEstoque.addEventListener('click', (e) => { e.preventDefault(); lockRelatorios(); switchView('estoque'); });
+
     // Submenu Toggles (Now handled by inline onclick in HTML)
 
+    // Relatórios — sub-abas navegam livremente após o pai ser desbloqueado
     if (navRelCaixa) navRelCaixa.addEventListener('click', (e) => { e.preventDefault(); switchView('rel-caixa'); });
     if (navRelServicos) navRelServicos.addEventListener('click', (e) => { e.preventDefault(); switchView('rel-servicos'); });
-    if (navGestaoBarbeiros) navGestaoBarbeiros.addEventListener('click', (e) => { e.preventDefault(); switchView('gestao-barbeiros'); });
-    if (navGestaoServicos) navGestaoServicos.addEventListener('click', (e) => { e.preventDefault(); switchView('gestao-servicos'); });
-    if (navGestaoUsuarios) navGestaoUsuarios.addEventListener('click', (e) => { e.preventDefault(); switchView('gestao-usuarios'); });
     if (navRelDesempenho) navRelDesempenho.addEventListener('click', (e) => { e.preventDefault(); switchView('rel-desempenho'); });
     if (navRelFaturamento) navRelFaturamento.addEventListener('click', (e) => { e.preventDefault(); switchView('rel-faturamento'); });
-    
-    navConfig.addEventListener('click', (e) => { e.preventDefault(); switchView('config'); });
+
+    if (navGestaoBarbeiros) navGestaoBarbeiros.addEventListener('click', (e) => { e.preventDefault(); lockRelatorios(); switchView('gestao-barbeiros'); });
+    if (navGestaoServicos) navGestaoServicos.addEventListener('click', (e) => { e.preventDefault(); lockRelatorios(); switchView('gestao-servicos'); });
+    if (navGestaoUsuarios) navGestaoUsuarios.addEventListener('click', (e) => { e.preventDefault(); lockRelatorios(); switchView('gestao-usuarios'); });
+
+    navConfig.addEventListener('click', (e) => { e.preventDefault(); lockRelatorios(); switchView('config'); });
 }
 
 function switchView(viewName) {
@@ -654,7 +796,7 @@ function populateSelects() {
     const barberOptions = '<option value="" disabled selected>Selecione quem atendeu</option>';
     const comBarberOptions = '<option value="all">Todos os Barbeiros</option>';
     const consumoBarberOptions = '<option value="" disabled selected>Selecione o barbeiro</option>';
-    
+
     barberSelect.innerHTML = barberOptions;
     if (comBarberSelect) comBarberSelect.innerHTML = comBarberOptions;
     if (consumoBarberSelect) consumoBarberSelect.innerHTML = consumoBarberOptions;
@@ -710,7 +852,7 @@ function setupMultiService() {
                 renderSelectedServices();
                 select.value = "";
             } else {
-                alert('Selecione um serviço primeiro.');
+                showToast('Selecione um serviço primeiro.', 'info');
             }
         };
     }
@@ -738,7 +880,7 @@ function renderSelectedServices() {
     }
 }
 
-window.removeSelectedService = function(index) {
+window.removeSelectedService = function (index) {
     selectedServicesForNewEntry.splice(index, 1);
     renderSelectedServices();
 };
@@ -746,9 +888,9 @@ window.removeSelectedService = function(index) {
 if (serviceForm) {
     serviceForm.addEventListener('submit', (e) => {
         e.preventDefault();
-        
+
         if (selectedServicesForNewEntry.length === 0) {
-            alert('Adicione pelo menos um serviço na lista.');
+            showToast('Adicione pelo menos um serviço na lista.', 'info');
             return;
         }
 
@@ -757,7 +899,7 @@ if (serviceForm) {
         const paymentMethod = paymentMethodSelect.value;
 
         if (!barberName || !timeValue || !paymentMethod) {
-            alert("Por favor, preencha todos os campos.");
+            showToast("Por favor, preencha todos os campos.", "info");
             return;
         }
 
@@ -778,13 +920,13 @@ if (serviceForm) {
 
         saveAppointmentsToStorage();
         updateDashboard();
-        if(navFinanceiro && navFinanceiro.classList.contains('active')) updateFinanceiro();
-        
+        if (navFinanceiro && navFinanceiro.classList.contains('active')) updateFinanceiro();
+
         // Limpeza
         serviceForm.reset();
         selectedServicesForNewEntry = [];
         renderSelectedServices();
-        alert('Atendimento(s) registrado(s) com sucesso!');
+        showToast('Atendimento(s) registrado(s) com sucesso!', 'success');
     });
 }
 
@@ -796,7 +938,7 @@ function updateDashboard() {
 function renderDailySchedule() {
     const todayServices = getTodayServices();
     scheduleHeader.innerHTML = '<th>Horário</th>';
-    
+
     // Create header with barbers
     barbers.forEach(barber => {
         const th = document.createElement('th');
@@ -805,13 +947,13 @@ function renderDailySchedule() {
     });
 
     scheduleBody.innerHTML = '';
-    
+
     // Generate times from 08:00 to 20:00 (every 30 mins)
     const times = [];
-    for(let h = 8; h <= 20; h++) {
+    for (let h = 8; h <= 20; h++) {
         const hourStr = h.toString().padStart(2, '0');
         times.push(`${hourStr}:00`);
-        if(h < 20) times.push(`${hourStr}:30`);
+        if (h < 20) times.push(`${hourStr}:30`);
     }
 
     times.forEach(time => {
@@ -823,14 +965,14 @@ function renderDailySchedule() {
 
         barbers.forEach(barber => {
             const td = document.createElement('td');
-            
+
             // Check if there is a service for this barber at this time
             const servicesInSlot = todayServices.filter(s => s.barber === barber.name && s.time === time);
-            
+
             if (servicesInSlot.length > 0) {
                 const isMultiple = servicesInSlot.length > 1;
                 const isPending = servicesInSlot.some(s => s.status === 'pendente');
-                
+
                 td.className = 'slot-occupied';
                 if (isPending) {
                     td.style.borderLeftColor = 'var(--danger-color)';
@@ -869,41 +1011,42 @@ function renderDailySchedule() {
     });
 }
 
-window.deleteService = async function(id) {
-    if (confirm('Deseja excluir este serviço?')) {
+window.deleteService = async function (id) {
+    showConfirm('Excluir Serviço', 'Deseja excluir este serviço?', async () => {
         // Remove do banco de dados
         const { error } = await supabaseClient.from('appointments').delete().eq('id', Math.floor(id));
         if (error) {
             console.error('Erro ao deletar agendamento no Supabase:', error);
-            alert('Erro ao excluir: ' + error.message);
+            showToast('Erro ao excluir: ' + error.message, 'error');
             return;
         }
 
         allServices = allServices.filter(s => s.id !== id);
         saveAppointmentsToStorage();
         updateDashboard();
-        if(navFinanceiro && navFinanceiro.classList.contains('active')) updateFinanceiro();
-        if(navRelCaixa && navRelCaixa.classList.contains('active')) updateReportsCaixa();
-        if(navRelServicos && navRelServicos.classList.contains('active')) updateReportsServicos();
-    }
+        if (navFinanceiro && navFinanceiro.classList.contains('active')) updateFinanceiro();
+        if (navRelCaixa && navRelCaixa.classList.contains('active')) updateReportsCaixa();
+        if (navRelServicos && navRelServicos.classList.contains('active')) updateReportsServicos();
+        showToast('Atendimento excluído!', 'success');
+    });
 };
 
-window.editService = function(id) {
+window.editService = function (id) {
     const service = allServices.find(s => s.id === id);
     if (!service) return;
 
     document.getElementById('edit-service-id').value = id;
-    
+
     // Populate selects
     const barberSelectEdit = document.getElementById('edit-barber-select');
     const serviceSelectEdit = document.getElementById('edit-service-select');
-    
+
     barberSelectEdit.innerHTML = '';
     barbers.forEach(b => {
         const opt = document.createElement('option');
         opt.value = b.name;
         opt.textContent = b.name;
-        if(b.name === service.barber) opt.selected = true;
+        if (b.name === service.barber) opt.selected = true;
         barberSelectEdit.appendChild(opt);
     });
 
@@ -912,7 +1055,7 @@ window.editService = function(id) {
         const opt = document.createElement('option');
         opt.value = s.id;
         opt.textContent = s.name;
-        if(s.name === service.serviceName) opt.selected = true;
+        if (s.name === service.serviceName) opt.selected = true;
         serviceSelectEdit.appendChild(opt);
     });
 
@@ -937,7 +1080,7 @@ if (editServiceForm) {
         e.preventDefault();
         const id = parseInt(document.getElementById('edit-service-id').value);
         const index = allServices.findIndex(s => s.id === id);
-        
+
         if (index !== -1) {
             const serviceId = parseInt(document.getElementById('edit-service-select').value);
             const serviceObj = services.find(s => s.id === serviceId);
@@ -952,10 +1095,10 @@ if (editServiceForm) {
             saveAppointmentsToStorage();
             document.getElementById('modal-edit-service').style.display = 'none';
             updateDashboard();
-            if(navFinanceiro && navFinanceiro.classList.contains('active')) updateFinanceiro();
-            if(navRelCaixa && navRelCaixa.classList.contains('active')) updateReportsCaixa();
-            if(navRelServicos && navRelServicos.classList.contains('active')) updateReportsServicos();
-            alert('Serviço atualizado!');
+            if (navFinanceiro && navFinanceiro.classList.contains('active')) updateFinanceiro();
+            if (navRelCaixa && navRelCaixa.classList.contains('active')) updateReportsCaixa();
+            if (navRelServicos && navRelServicos.classList.contains('active')) updateReportsServicos();
+            showToast('Serviço atualizado!', 'success');
         }
     };
 }
@@ -979,7 +1122,7 @@ function setupConfigServices() {
             form.reset();
             renderServicesList();
             populateSelects();
-            alert('Serviço cadastrado!');
+            showToast('Serviço cadastrado!', 'success');
         };
     }
 }
@@ -1010,13 +1153,13 @@ function renderServicesList() {
     });
 }
 
-window.deleteServiceConfig = async function(id) {
-    if (confirm('Deseja excluir este serviço?')) {
+window.deleteServiceConfig = async function (id) {
+    showConfirm('Excluir Serviço', 'Deseja excluir este serviço?', async () => {
         // Remove do banco de dados
         const { error } = await supabaseClient.from('services').delete().eq('id', Math.floor(id));
         if (error) {
             console.error('Erro ao deletar configuração de serviço no Supabase:', error);
-            alert('Erro ao excluir: ' + error.message);
+            showToast('Erro ao excluir: ' + error.message, 'error');
             return;
         }
 
@@ -1024,17 +1167,18 @@ window.deleteServiceConfig = async function(id) {
         saveServicesToStorage();
         renderServicesList();
         populateSelects();
-    }
+        showToast('Serviço excluído!', 'success');
+    });
 };
 
-window.editServiceConfig = function(id) {
+window.editServiceConfig = function (id) {
     const s = services.find(sc => sc.id === id);
     if (!s) return;
-    
+
     document.getElementById('edit-config-service-id').value = s.id;
     document.getElementById('edit-config-service-name').value = s.name;
     document.getElementById('edit-config-service-price').value = s.defaultPrice.toFixed(2);
-    
+
     document.getElementById('modal-edit-config-service').style.display = 'flex';
 };
 
@@ -1045,30 +1189,30 @@ if (formEditConfigService) {
         const id = parseInt(document.getElementById('edit-config-service-id').value);
         const newName = document.getElementById('edit-config-service-name').value.trim();
         const newPrice = parseFloat(document.getElementById('edit-config-service-price').value);
-        
+
         if (!newName || isNaN(newPrice)) return;
-        
+
         const s = services.find(sc => sc.id === id);
         if (!s) return;
-        
+
         // Atualiza o histórico
         allServices.forEach(srv => {
             if (srv.serviceName === s.name) {
                 srv.serviceName = newName;
             }
         });
-        
+
         s.name = newName;
         s.defaultPrice = newPrice;
-        
+
         saveServicesToStorage();
         saveAppointmentsToStorage();
         renderServicesList();
         populateSelects();
         updateDashboard();
-        
+
         document.getElementById('modal-edit-config-service').style.display = 'none';
-        alert('Serviço atualizado!');
+        showToast('Serviço atualizado!', 'success');
     });
 }
 // Financeiro
@@ -1094,7 +1238,7 @@ function setupFinanceiroFilters() {
             if (finDateStartInput.value && finDateEndInput.value) {
                 updateFinanceiro();
             } else {
-                alert('Selecione as datas de início e fim.');
+                showToast('Selecione as datas de início e fim.', 'info');
             }
         });
     }
@@ -1106,20 +1250,20 @@ function getFinanceiroDateRange() {
 
 function updateFinanceiro() {
     const { start, end } = getFinanceiroDateRange();
-    
+
     const filteredServices = getServicesByDateRange(start, end).filter(s => s.status !== 'pendente');
     const filteredSales = productSales.filter(s => s.date >= start && s.date <= end);
-    
+
     const servicesRevenue = filteredServices.reduce((acc, curr) => acc + curr.price, 0);
     const salesRevenue = filteredSales.reduce((acc, curr) => acc + (curr.price * curr.quantity), 0);
-    
+
     const totalRevenue = servicesRevenue + salesRevenue;
     const totalCount = filteredServices.length + filteredSales.length;
     const avgTicket = totalCount > 0 ? totalRevenue / totalCount : 0;
 
-    if(finTotalRevenue) finTotalRevenue.textContent = `R$ ${totalRevenue.toFixed(2).replace('.', ',')}`;
-    if(finTotalServices) finTotalServices.textContent = filteredServices.length;
-    if(finAvgTicket) finAvgTicket.textContent = `R$ ${avgTicket.toFixed(2).replace('.', ',')}`;
+    if (finTotalRevenue) finTotalRevenue.textContent = `R$ ${totalRevenue.toFixed(2).replace('.', ',')}`;
+    if (finTotalServices) finTotalServices.textContent = filteredServices.length;
+    if (finAvgTicket) finAvgTicket.textContent = `R$ ${avgTicket.toFixed(2).replace('.', ',')}`;
 
     // Resumo por forma de pagamento (incluindo vendas)
     renderPaymentBreakdown(filteredServices, filteredSales);
@@ -1127,11 +1271,11 @@ function updateFinanceiro() {
 
 function renderPaymentBreakdown(servicesList, salesList = []) {
     if (!paymentMethodsGrid) return;
-    
+
     const methods = ['Dinheiro', 'PIX', 'Débito', 'Crédito', 'Cartão'];
     const stats = {};
     methods.forEach(m => stats[m] = { revenue: 0, count: 0 });
-    
+
     servicesList.forEach(s => {
         const method = s.paymentMethod;
         if (method && stats[method]) {
@@ -1147,9 +1291,9 @@ function renderPaymentBreakdown(servicesList, salesList = []) {
             stats[method].count++;
         }
     });
-    
+
     paymentMethodsGrid.innerHTML = '';
-    
+
     Object.entries(stats).forEach(([method, data]) => {
         const card = document.createElement('div');
         card.className = 'payment-stats-card';
@@ -1194,7 +1338,7 @@ function setupComissoesFilters() {
             if (comDateStartInput.value && comDateEndInput.value) {
                 updateComissoes();
             } else {
-                alert('Selecione as datas de início e fim.');
+                showToast('Selecione as datas de início e fim.', 'info');
             }
         });
     }
@@ -1208,23 +1352,23 @@ function updateComissoes() {
     const { start, end } = getComissoesDateRange();
     let filteredServices = getServicesByDateRange(start, end).filter(s => s.status !== 'pendente');
     let filteredConsumo = getConsumptionByDateRange(start, end);
-    
+
     if (currentComissoesBarber !== 'all') {
         filteredServices = filteredServices.filter(s => s.barber === currentComissoesBarber);
         filteredConsumo = filteredConsumo.filter(c => c.barber === currentComissoesBarber);
     }
-    
+
     const production = filteredServices.reduce((acc, curr) => acc + curr.price, 0);
     const commission = production * 0.5;
     const consumptionTotal = filteredConsumo.reduce((acc, curr) => acc + curr.price, 0);
     const netTotal = commission - consumptionTotal;
-    
+
     if (comTotalProduction) comTotalProduction.textContent = `R$ ${production.toFixed(2).replace('.', ',')}`;
     if (comTotalCommission) comTotalCommission.textContent = `R$ ${commission.toFixed(2).replace('.', ',')}`;
     if (comServiceCount) comServiceCount.textContent = filteredServices.length;
     if (comTotalConsumo) comTotalConsumo.textContent = `R$ ${consumptionTotal.toFixed(2).replace('.', ',')}`;
     if (comNetTotal) comNetTotal.textContent = `R$ ${netTotal.toFixed(2).replace('.', ',')}`;
-    
+
     renderComissoesHistory(filteredServices, filteredConsumo);
 }
 
@@ -1323,7 +1467,7 @@ function setupConsumo() {
             const date = consumoDateInput.value;
 
             if (!barber || !product || isNaN(price) || !date) {
-                alert('Preencha todos os campos.');
+                showToast('Preencha todos os campos.', 'info');
                 return;
             }
 
@@ -1331,12 +1475,12 @@ function setupConsumo() {
             const inventoryItem = inventory.find(p => p.id === prodId);
 
             if (!inventoryItem) {
-                alert('Produto não encontrado no estoque.');
+                showToast('Produto não encontrado no estoque.', 'error');
                 return;
             }
 
             if (inventoryItem.stock <= 0) {
-                alert('Estoque esgotado para este produto!');
+                showToast('Estoque esgotado para este produto!', 'error');
                 return;
             }
 
@@ -1355,24 +1499,24 @@ function setupConsumo() {
 
             allConsumption.unshift(newConsumo);
             await saveConsumoToStorage();
-            
+
             consumoForm.reset();
             renderConsumoList();
             renderInventory(); // Atualiza tabela de estoque
             populateProductSelect(); // Atualiza dropdowns
-            alert('Consumo registrado e estoque atualizado!');
+            showToast('Consumo registrado e estoque atualizado!', 'success');
         });
     }
-    
+
     if (consumoDateInput) consumoDateInput.value = getTodayKey();
 }
 
 function renderConsumoList() {
     if (!consumoHistoryList) return;
     consumoHistoryList.innerHTML = '';
-    
+
     const recent = allConsumption.slice(0, 10);
-    
+
     if (recent.length === 0) {
         consumoHistoryList.innerHTML = '<p class="empty-state">Nenhum consumo registrado.</p>';
         return;
@@ -1400,13 +1544,13 @@ function renderConsumoList() {
     });
 }
 
-window.deleteConsumo = async function(id) {
-    if (confirm('Deseja excluir este lançamento? O item voltará para o estoque.')) {
+window.deleteConsumo = async function (id) {
+    showConfirm('Excluir Lançamento', 'Deseja excluir este lançamento? O item voltará para o estoque.', async () => {
         // Remove do banco de dados
         const { error } = await supabaseClient.from('consumption').delete().eq('id', Math.floor(id));
         if (error) {
             console.error('Erro ao deletar consumo no Supabase:', error);
-            alert('Erro ao excluir: ' + error.message);
+            showToast('Erro ao excluir: ' + error.message, 'error');
             return;
         }
 
@@ -1424,8 +1568,8 @@ window.deleteConsumo = async function(id) {
         renderConsumoList();
         renderInventory();
         populateProductSelect();
-        alert('Lançamento excluído e estoque devolvido.');
-    }
+        showToast('Lançamento excluído!', 'success');
+    });
 };
 
 // ---- Aba Barbeiros ----
@@ -1433,7 +1577,7 @@ if (barberForm) {
     barberForm.addEventListener('submit', (e) => {
         e.preventDefault();
         const name = newBarberName.value.trim();
-        if(name) {
+        if (name) {
             barbers.push({ id: Date.now(), name: name });
             saveBarbersToStorage();
             newBarberName.value = '';
@@ -1444,12 +1588,24 @@ if (barberForm) {
 }
 
 async function deleteBarber(id) {
-    if(confirm('Remover este barbeiro?')) {
-        // Remove do banco de dados
+    showConfirm('Excluir Barbeiro', 'Remover este barbeiro? Os atendimentos históricos serão preservados, mas não estarão mais vinculados a este ID.', async () => {
+        // Primeiro, remove a referência deste barbeiro nos agendamentos (mantendo o nome para o histórico)
+        const { error: updateError } = await supabaseClient
+            .from('appointments')
+            .update({ barber_id: null })
+            .eq('barber_id', Math.floor(id));
+
+        if (updateError) {
+            console.error('Erro ao desvincular atendimentos:', updateError);
+            showToast('Erro ao preparar exclusão: ' + updateError.message, 'error');
+            return;
+        }
+
+        // Agora sim, remove o barbeiro
         const { error } = await supabaseClient.from('barbers').delete().eq('id', Math.floor(id));
         if (error) {
             console.error('Erro ao deletar barbeiro no Supabase:', error);
-            alert('Erro ao excluir: ' + error.message);
+            showToast('Erro ao excluir: ' + error.message, 'error');
             return;
         }
 
@@ -1457,16 +1613,17 @@ async function deleteBarber(id) {
         saveBarbersToStorage();
         renderBarbersList();
         populateSelects();
-    }
+        showToast('Barbeiro removido!', 'success');
+    });
 }
 
-window.editBarber = function(id) {
+window.editBarber = function (id) {
     const b = barbers.find(bar => bar.id === id);
     if (!b) return;
-    
+
     document.getElementById('edit-config-barber-id').value = b.id;
     document.getElementById('edit-config-barber-name').value = b.name;
-    
+
     document.getElementById('modal-edit-config-barber').style.display = 'flex';
 };
 
@@ -1476,40 +1633,40 @@ if (formEditConfigBarber) {
         e.preventDefault();
         const id = parseInt(document.getElementById('edit-config-barber-id').value);
         const newName = document.getElementById('edit-config-barber-name').value.trim();
-        
+
         if (!newName) return;
-        
+
         const b = barbers.find(bar => bar.id === id);
         if (!b) return;
-        
+
         if (newName === b.name) {
             document.getElementById('modal-edit-config-barber').style.display = 'none';
             return;
         }
-        
+
         const oldName = b.name;
-        
+
         allServices.forEach(s => {
             if (s.barber === oldName) s.barber = newName;
         });
-        
+
         allConsumption.forEach(c => {
             if (c.barber === oldName) c.barber = newName;
         });
-        
+
         b.name = newName;
-        
+
         saveBarbersToStorage();
         saveAppointmentsToStorage();
         saveConsumoToStorage();
-        
+
         renderBarbersList();
         populateSelects();
         updateDashboard();
-        if(viewComissoes && viewComissoes.style.display !== 'none') updateComissoes();
-        
+        if (viewComissoes && viewComissoes.style.display !== 'none') updateComissoes();
+
         document.getElementById('modal-edit-config-barber').style.display = 'none';
-        alert('Barbeiro atualizado!');
+        showToast('Barbeiro atualizado!', 'success');
     });
 }
 
@@ -1572,7 +1729,7 @@ function setupReportFilters() {
             if (dateStartInputCaixa.value && dateEndInputCaixa.value) {
                 updateReportsCaixa();
             } else {
-                alert('Selecione as datas de início e fim.');
+                showToast('Selecione as datas de início e fim.', 'info');
             }
         });
     }
@@ -1599,7 +1756,7 @@ function setupReportFilters() {
             if (dateStartInputServicos.value && dateEndInputServicos.value) {
                 updateReportsServicos();
             } else {
-                alert('Selecione as datas de início e fim.');
+                showToast('Selecione as datas de início e fim.', 'info');
             }
         });
     }
@@ -1620,7 +1777,7 @@ function renderCashHistory(start, end) {
     const filteredCash = cashHistory.filter(c => c.date >= start && c.date <= end).sort((a, b) => b.date.localeCompare(a.date));
     if (!cashHistoryBody) return;
     cashHistoryBody.innerHTML = '';
-    
+
     if (filteredCash.length === 0) {
         if (cashHistoryTable) cashHistoryTable.parentElement.style.display = 'none';
         if (cashHistoryEmpty) cashHistoryEmpty.style.display = 'block';
@@ -1634,20 +1791,20 @@ function renderCashHistory(start, end) {
         const tr = document.createElement('tr');
         const statusText = c.status === 'aberto' ? '<span style="color: #27ae60; font-weight: 600;">Aberto</span>' : '<span style="color: #7f8c8d; font-weight: 600;">Fechado</span>';
         const fechamentoText = c.status === 'fechado' ? c.closedAt : '--';
-        const finalValue = c.status === 'fechado' ? c.finalValue : (c.openingValue + (c.servicesValue || 0));
-        
+        let finalValue = c.status === 'fechado' ? c.finalValue : (c.initialValue + (c.servicesValue || 0));
+
         // Calculate services if not closed yet
         let servicesTotal = c.servicesValue;
         if (c.status === 'aberto') {
             const todayServices = allServices.filter(s => s.date === c.date && s.status !== 'pendente');
             servicesTotal = todayServices.reduce((acc, curr) => acc + curr.price, 0);
-            finalValue = c.openingValue + servicesTotal;
+            finalValue = c.initialValue + servicesTotal;
         }
 
         tr.innerHTML = `
             <td>${formatDateBR(c.date)}</td>
             <td>${statusText}</td>
-            <td>R$ ${c.openingValue.toFixed(2).replace('.', ',')} <br><small class="text-muted">às ${c.openedAt}</small></td>
+            <td>R$ ${c.initialValue.toFixed(2).replace('.', ',')} <br><small class="text-muted">às ${c.openedAt}</small></td>
             <td>R$ ${servicesTotal.toFixed(2).replace('.', ',')}</td>
             <td><strong>R$ ${finalValue.toFixed(2).replace('.', ',')}</strong> <br><small class="text-muted">${c.status === 'fechado' ? 'às ' + c.closedAt : ''}</small></td>
             <td>
@@ -1660,26 +1817,26 @@ function renderCashHistory(start, end) {
     });
 }
 
-window.deleteCashHistory = async function(id) {
-    if (confirm('Tem certeza que deseja excluir o histórico deste caixa? Essa ação não pode ser desfeita.')) {
+window.deleteCashHistory = async function (id) {
+    showConfirm('Excluir Histórico de Caixa', 'Tem certeza que deseja excluir o histórico deste caixa? Essa ação não pode ser desfeita.', async () => {
         // Remove do banco de dados
         const { error } = await supabaseClient.from('cash_history').delete().eq('id', Math.floor(id));
         if (error) {
             console.error('Erro ao deletar histórico de caixa no Supabase:', error);
-            alert('Erro ao excluir: ' + error.message);
+            showToast('Erro ao excluir: ' + error.message, 'error');
             return;
         }
 
         cashHistory = cashHistory.filter(c => c.id !== id);
         saveCashRegisterToStorage();
-        
+
         // Atualiza a interface
         updateReportsCaixa();
         updateReportsServicos();
         updateDashboard();
         updateCaixaButton();
-        alert('Histórico de caixa excluído!');
-    }
+        showToast('Histórico de caixa excluído!', 'success');
+    });
 };
 
 function renderRanking(servicesList) {
@@ -1811,64 +1968,65 @@ if (newUserForm) {
         const uname = newSystemUsername.value.trim().toLowerCase();
         const upass = newSystemPassword.value;
         const upassConfirm = document.getElementById('new-system-password-confirm').value;
-        
+
         if (upass !== upassConfirm) {
-            alert('As senhas não coincidem!');
+            showToast('As senhas não coincidem!', 'error');
             return;
         }
-        
+
         if (users.find(u => u.username === uname)) {
-            alert('Este usuário já existe!');
+            showToast('Este usuário já existe!', 'error');
             return;
         }
-        
+
         users.push({ id: Date.now(), username: uname, password: upass });
         saveUsersToStorage();
         newSystemUsername.value = '';
         newSystemPassword.value = '';
         document.getElementById('new-system-password-confirm').value = '';
         renderUsersList();
-        alert('Usuário criado com sucesso!');
+        showToast('Usuário criado com sucesso!', 'success');
     });
 }
 
 async function deleteUser(id) {
     const userToDelete = users.find(u => u.id === id);
     if (!userToDelete) return;
-    
+
     if (userToDelete.username === currentUser.username) {
-        alert('Você não pode excluir a si mesmo!');
+        showToast('Você não pode excluir a si mesmo!', 'error');
         return;
     }
-    
+
     if (userToDelete.username === 'guilherme') {
-        alert('O usuário ADMIN não pode ser excluído!');
+        showToast('O usuário ADMIN não pode ser excluído!', 'error');
         return;
     }
-    
-    if(confirm('Tem certeza que deseja remover este acesso?')) {
+
+    showConfirm('Remover Acesso', 'Tem certeza que deseja remover este acesso?', async () => {
         // Remove do banco de dados (tabela profiles)
         const { error } = await supabaseClient.from('profiles').delete().eq('id', userToDelete.id);
         if (error) {
             console.error('Erro ao deletar usuário no Supabase:', error);
-            alert('Erro ao excluir: ' + error.message);
+            showToast('Erro ao excluir: ' + error.message, 'error');
             return;
         }
 
         users = users.filter(u => u.id !== id);
         saveUsersToStorage();
         renderUsersList();
-    }
+        showToast('Acesso removido!', 'success');
+    });
 }
 
-window.editUser = function(id) {
+window.editUser = function (id) {
     const u = users.find(user => user.id === id);
     if (!u) return;
-    
+
     document.getElementById('edit-user-id').value = u.id;
     document.getElementById('edit-user-username').value = u.username;
     document.getElementById('edit-user-password').value = '';
-    
+
     document.getElementById('modal-edit-user').style.display = 'flex';
 };
 
@@ -1879,44 +2037,43 @@ if (formEditUser) {
         const id = parseInt(document.getElementById('edit-user-id').value);
         const newUsername = document.getElementById('edit-user-username').value.trim().toLowerCase();
         const newPassword = document.getElementById('edit-user-password').value;
-        
+
         if (!newUsername) return;
-        
+
         const u = users.find(user => user.id === id);
         if (!u) return;
-        
+
         if (newUsername !== u.username && users.some(x => x.username === newUsername)) {
-            alert('Este nome de usuário já está em uso!');
+            showToast('Este nome de usuário já está em uso!', 'error');
             return;
         }
-        
+
         if (u.username === 'guilherme' && newUsername !== 'guilherme') {
-            alert('O nome do usuário ADMIN não pode ser alterado, apenas a senha.');
+            showToast('O nome do usuário ADMIN não pode ser alterado.', 'error');
             document.getElementById('edit-user-username').value = 'guilherme';
             return;
         }
-        
+
         const isMe = (u.username === currentUser.username);
-        
+
         u.username = newUsername;
         if (newPassword) {
             u.password = newPassword;
         }
-        
+
         if (isMe) {
             currentUser.username = u.username;
             currentUser.password = u.password;
-            sessionStorage.setItem('barbearia_logged_in', JSON.stringify(currentUser));
-            if(document.getElementById('user-display-name')) {
+            if (document.getElementById('user-display-name')) {
                 document.getElementById('user-display-name').textContent = u.username;
             }
         }
-        
+
         saveUsersToStorage();
         renderUsersList();
-        
+
         document.getElementById('modal-edit-user').style.display = 'none';
-        alert('Usuário atualizado com sucesso!');
+        showToast('Usuário atualizado com sucesso!', 'success');
     });
 }
 
@@ -1946,13 +2103,13 @@ function renderUsersList() {
 }
 
 // ---- Local Storage ----
-async function saveAppointmentsToStorage() { 
+async function saveAppointmentsToStorage() {
     if (!currentTenantId) return;
     // Traduz do JS para o Banco de Dados e garante ID inteiro + busca IDs reais
     const dbData = allServices.map(s => {
         const barberObj = barbers.find(b => b.name === (s.barber || s.barberName));
         const serviceObj = services.find(sv => sv.name === s.serviceName);
-        
+
         return {
             id: Math.floor(s.id),
             tenant_id: currentTenantId,
@@ -1967,15 +2124,15 @@ async function saveAppointmentsToStorage() {
             status: s.status
         };
     });
-    
+
     const { error } = await supabaseClient.from('appointments').upsert(dbData);
     if (error) {
         console.error('Erro ao salvar agendamentos no Supabase:', error);
-        alert('Erro ao salvar agendamento: ' + error.message);
+        showToast('Erro ao salvar agendamento: ' + error.message, 'error');
     }
 }
 
-async function saveServicesToStorage() { 
+async function saveServicesToStorage() {
     if (!currentTenantId) return;
     // Traduz defaultPrice para 'price' no banco e garante ID inteiro
     const dbData = services.map(s => ({
@@ -1984,15 +2141,15 @@ async function saveServicesToStorage() {
         name: s.name,
         price: s.defaultPrice
     }));
-    
+
     const { error } = await supabaseClient.from('services').upsert(dbData);
     if (error) {
         console.error('Erro ao salvar configuração de serviços no Supabase:', error);
-        alert('Erro ao salvar serviço: ' + error.message);
+        showToast('Erro ao salvar serviço: ' + error.message, 'error');
     }
 }
 
-async function saveBarbersToStorage() { 
+async function saveBarbersToStorage() {
     if (!currentTenantId) return;
     const dbData = barbers.map(b => ({
         id: Math.floor(b.id),
@@ -2003,27 +2160,32 @@ async function saveBarbersToStorage() {
     if (error) console.error('Erro ao salvar barbeiros no Supabase:', error);
 }
 
-async function saveUsersToStorage() { 
+async function saveUsersToStorage() {
     // Usuários agora são gerenciados pelo Supabase Auth/Profiles. 
     // Manteremos essa função vazia por enquanto para não quebrar chamadas legadas.
 }
 
-async function saveCashRegisterToStorage() { 
+async function saveCashRegisterToStorage() {
     if (!currentTenantId) return;
     const dbData = cashHistory.map(c => ({
         id: Math.floor(c.id),
         tenant_id: currentTenantId,
         date: c.date,
+        type: 'caixa', // Campo obrigatório no banco
+        amount: c.finalValue || 0, // Campo obrigatório no banco
         initial_value: c.initialValue,
         final_value: c.finalValue,
+        services_value: c.servicesValue || 0,
         status: c.status,
+        opened_at: c.openedAt,
+        closed_at: c.closedAt,
         obs: c.obs
     }));
     const { error } = await supabaseClient.from('cash_history').upsert(dbData);
     if (error) console.error('Erro ao salvar caixa no Supabase:', error);
 }
 
-async function saveInventoryToStorage() { 
+async function saveInventoryToStorage() {
     if (!currentTenantId) return;
     const dbData = inventory.map(i => ({
         id: Math.floor(i.id),
@@ -2036,7 +2198,7 @@ async function saveInventoryToStorage() {
     if (error) console.error('Erro ao salvar estoque no Supabase:', error);
 }
 
-async function saveProductSalesToStorage() { 
+async function saveProductSalesToStorage() {
     if (!currentTenantId) return;
     const dbData = productSales.map(s => {
         const productObj = inventory.find(p => p.name === s.productName);
@@ -2055,7 +2217,7 @@ async function saveProductSalesToStorage() {
     if (error) console.error('Erro ao salvar vendas no Supabase:', error);
 }
 
-async function saveConsumoToStorage() { 
+async function saveConsumoToStorage() {
     if (!currentTenantId) return;
     const dbData = allConsumption.map(c => ({
         id: Math.floor(c.id),
@@ -2108,7 +2270,7 @@ btnExport.addEventListener('click', async () => {
             const writable = await handle.createWritable();
             await writable.write(json);
             await writable.close();
-            alert('Backup salvo com sucesso!');
+            showToast('Backup salvo com sucesso!', 'success');
             return;
         } catch (err) {
             // Usuário cancelou o diálogo
@@ -2126,7 +2288,7 @@ btnExport.addEventListener('click', async () => {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    alert('Backup exportado! Verifique sua pasta de Downloads.');
+    showToast('Backup exportado! Verifique seus Downloads.', 'success');
 });
 
 btnImport.addEventListener('click', () => {
@@ -2143,43 +2305,39 @@ importFileInput.addEventListener('change', (e) => {
             const data = JSON.parse(event.target.result);
 
             if (!data.services || !data.barbers || !data.users) {
-                alert('Arquivo inválido! Não contém os dados esperados.');
+                showToast('Arquivo inválido!', 'error');
                 return;
             }
 
-            if (!confirm(`Importar backup de ${data.exportedAt ? new Date(data.exportedAt).toLocaleString('pt-BR') : 'data desconhecida'}?\n\nIsso substituirá TODOS os dados atuais.\n\nServiços: ${data.services.length}\nBarbeiros: ${data.barbers.length}\nUsuários: ${data.users.length}`)) {
-                return;
-            }
+            showConfirm('Importar Backup', `Importar backup de ${data.exportedAt ? new Date(data.exportedAt).toLocaleString('pt-BR') : 'data desconhecida'}?\n\nIsso substituirá TODOS os dados atuais.`, () => {
+                allServices = data.services;
+                barbers = data.barbers;
+                users = data.users;
 
-            allServices = data.services;
-            barbers = data.barbers;
-            users = data.users;
-            
-            // Suporte para backup antigo e novo
-            if (data.cashHistory) {
-                cashHistory = data.cashHistory;
-            } else if (data.cashRegister) {
-                data.cashRegister.id = Date.now();
-                data.cashRegister.status = 'aberto';
-                cashHistory = [data.cashRegister];
-            } else {
-                cashHistory = [];
-            }
+                if (data.cashHistory) {
+                    cashHistory = data.cashHistory;
+                } else if (data.cashRegister) {
+                    data.cashRegister.id = Date.now();
+                    data.cashRegister.status = 'aberto';
+                    cashHistory = [data.cashRegister];
+                } else {
+                    cashHistory = [];
+                }
 
-            saveServicesToStorage();
-            saveBarbersToStorage();
-            saveUsersToStorage();
-            saveCashRegisterToStorage();
+                saveServicesToStorage();
+                saveBarbersToStorage();
+                saveUsersToStorage();
+                saveCashRegisterToStorage();
 
-            // Atualiza tudo na tela
-            populateSelects();
-            updateDashboard();
-            updateCaixaButton();
-            renderUsersList();
+                populateSelects();
+                updateDashboard();
+                updateCaixaButton();
+                renderUsersList();
 
-            alert('Dados importados com sucesso!');
+                showToast('Dados importados com sucesso!', 'success');
+            });
         } catch (err) {
-            alert('Erro ao ler o arquivo. Verifique se é um backup válido.');
+            showToast('Erro ao ler o arquivo.', 'error');
         }
     };
     reader.readAsText(file);
@@ -2191,36 +2349,34 @@ const btnClearFinancial = document.getElementById('btn-clear-financial');
 
 if (btnClearFinancial) {
     btnClearFinancial.addEventListener('click', () => {
-        const confirm1 = confirm('ATENÇÃO: Isso apagará todos os serviços registrados e o histórico de caixa.');
-        if (!confirm1) return;
+        showConfirm('Limpar Dados', 'ATENÇÃO: Isso apagará todos os serviços registrados e o histórico de caixa. Deseja continuar?', () => {
+            showConfirm('Confirmação Final', 'TEM CERTEZA? Barbeiros e usuários serão mantidos, mas todo o faturamento será zerado. Esta ação não tem volta.', () => {
+                // Limpa arrays
+                allServices = [];
+                cashHistory = [];
+                allConsumption = [];
+                productSales = [];
 
-        const confirm2 = confirm('TEM CERTEZA? Barbeiros e usuários serão mantidos, mas todo o faturamento será zerado. Esta ação não tem volta.');
-        if (!confirm2) return;
+                // Salva estados vazios
+                saveServicesToStorage();
+                saveServicesToStorage();
+                saveCashRegisterToStorage();
+                saveConsumoToStorage();
+                saveProductSalesToStorage();
 
-        // Limpa arrays
-        allServices = [];
-        cashHistory = [];
-        allConsumption = [];
-        productSales = [];
+                // Atualiza Interface
+                updateDashboard();
+                updateFinanceiro();
+                updateReportsCaixa();
+                updateReportsServicos();
+                updateCaixaButton();
+                renderConsumoList();
+                renderInventory();
+                populateProductSelect();
 
-        // Salva estados vazios
-        saveServicesToStorage();
-        saveServicesToStorage();
-        saveCashRegisterToStorage();
-        saveConsumoToStorage();
-        saveProductSalesToStorage();
-
-        // Atualiza Interface
-        updateDashboard();
-        updateFinanceiro();
-        updateReportsCaixa();
-        updateReportsServicos();
-        updateCaixaButton();
-        renderConsumoList();
-        renderInventory();
-        populateProductSelect();
-        
-        alert('Todos os dados financeiros, consumos e vendas foram zerados.');
+                showToast('Dados financeiros zerados.', 'success');
+            });
+        });
     });
 }
 
@@ -2228,85 +2384,219 @@ if (btnClearFinancial) {
 function setupCaixa() {
     caixaDateInput.value = getTodayKey();
 
-    btnCaixa.addEventListener('click', () => {
-        const today = getTodayKey();
-        const todayCash = cashHistory.find(c => c.date === today);
-        
-        if (todayCash) {
-            switchView('dashboard');
-        } else {
-            caixaDateInput.value = getTodayKey();
-            caixaValueInput.value = '100.00';
-            caixaObsInput.value = '';
-            modalCaixa.style.display = 'flex';
-        }
-    });
+    if (!btnCaixa._caixaBtnListenerAdded) {
+        btnCaixa._caixaBtnListenerAdded = true;
+        btnCaixa.addEventListener('click', () => {
+            const today = getTodayKey();
+            const todayCash = cashHistory.find(c => c.date === today);
 
-    modalCaixaClose.addEventListener('click', () => { modalCaixa.style.display = 'none'; });
-    modalCaixa.addEventListener('click', (e) => { if (e.target === modalCaixa) modalCaixa.style.display = 'none'; });
+            if (todayCash) {
+                switchView('dashboard');
+            } else {
+                caixaDateInput.value = getTodayKey();
+                caixaValueInput.value = '100.00';
+                caixaObsInput.value = '';
+                modalCaixa.style.display = 'flex';
+            }
+        });
+    }
 
-    caixaForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const date = caixaDateInput.value;
-        const value = parseFloat(caixaValueInput.value);
-        const obs = caixaObsInput.value.trim();
+    if (!modalCaixaClose._caixaListenerAdded) {
+        modalCaixaClose._caixaListenerAdded = true;
+        modalCaixaClose.addEventListener('click', () => { modalCaixa.style.display = 'none'; });
+        modalCaixa.addEventListener('click', (e) => { if (e.target === modalCaixa) modalCaixa.style.display = 'none'; });
+    }
 
-        if (!date || isNaN(value)) {
-            alert('Preencha a data e o valor.');
-            return;
-        }
+    if (!caixaForm._caixaFormListenerAdded) {
+        caixaForm._caixaFormListenerAdded = true;
+        caixaForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const date = caixaDateInput.value;
+            const value = parseFloat(caixaValueInput.value);
+            const obs = caixaObsInput.value.trim();
 
-        const newCash = {
-            id: Date.now(),
-            date: date,
-            openingValue: value,
-            observation: obs,
-            openedAt: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-            status: 'aberto'
-        };
+            if (!date || isNaN(value)) {
+                showToast('Preencha a data e o valor.', 'info');
+                return;
+            }
 
-        cashHistory.push(newCash);
-        saveCashRegisterToStorage();
-        modalCaixa.style.display = 'none';
-        updateDashboard();
-        updateCaixaButton();
-        alert('Caixa aberto com sucesso!');
-    });
+            // Evita abrir caixa duplicado para o mesmo dia
+            if (cashHistory.find(c => c.date === date)) {
+                showToast('Já existe um caixa para esta data!', 'error');
+                modalCaixa.style.display = 'none';
+                return;
+            }
 
-    btnFecharCaixa.addEventListener('click', () => {
-        const today = getTodayKey();
-        const todayCash = cashHistory.find(c => c.date === today);
-        
-        if (!todayCash || todayCash.status === 'fechado') return;
+            const newCash = {
+                id: Date.now(),
+                date: date,
+                initialValue: value,
+                servicesValue: 0,
+                finalValue: value,
+                obs: obs,
+                openedAt: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+                openedAtTs: Date.now(), // Timestamp completo para filtrar vendas
+                closedAt: '--',
+                status: 'aberto'
+            };
 
-        if (confirm('Tem certeza que deseja encerrar o expediente de hoje?\nIsso fechará o caixa e os valores não poderão mais ser alterados.')) {
-            const todayServices = getTodayServices();
-            const servicesRev = todayServices.reduce((acc, curr) => acc + curr.price, 0);
-            
-            const todaySales = productSales.filter(s => s.date === today);
-            const salesRev = todaySales.reduce((acc, curr) => acc + (curr.price * curr.quantity), 0);
-            
-            const totalRevenue = servicesRev + salesRev;
-
-            todayCash.status = 'fechado';
-            todayCash.closedAt = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-            todayCash.servicesValue = totalRevenue;
-            todayCash.finalValue = todayCash.openingValue + totalRevenue;
-            
+            cashHistory.push(newCash);
             saveCashRegisterToStorage();
+            modalCaixa.style.display = 'none';
             updateDashboard();
             updateCaixaButton();
-            alert('Expediente encerrado! Caixa fechado.');
-        }
-    });
+            showToast('Caixa aberto com sucesso!', 'success');
+        });
+    }
+
+    if (!btnFecharCaixa._caixaFecharListenerAdded) {
+        btnFecharCaixa._caixaFecharListenerAdded = true;
+        btnFecharCaixa.addEventListener('click', () => {
+            const today = getTodayKey();
+            const todayCash = cashHistory.find(c => c.date === today);
+
+            if (!todayCash || todayCash.status === 'fechado') return;
+
+                showConfirm('Encerrar Expediente', 'Tem certeza que deseja encerrar o expediente de hoje? Isso fechará o caixa.', () => {
+                    const todayServices = getTodayServices();
+                    const servicesRev = todayServices.reduce((acc, curr) => acc + curr.price, 0);
+
+                    // Conta apenas as vendas feitas após a abertura deste caixa
+                    const caixaOpenTs = todayCash.openedAtTs || 0;
+                    const todaySales = productSales.filter(s => Number(s.id) >= caixaOpenTs);
+                    const salesRev = todaySales.reduce((acc, curr) => acc + (curr.price * curr.quantity), 0);
+
+                    const totalRevenue = servicesRev + salesRev;
+
+                    todayCash.status = 'fechado';
+                    todayCash.closedAt = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                    todayCash.servicesValue = totalRevenue;
+                    todayCash.finalValue = todayCash.initialValue + totalRevenue;
+
+                    saveCashRegisterToStorage();
+                    updateDashboard();
+                    updateCaixaButton();
+                    showToast('Expediente encerrado!', 'success');
+                });
+        });
+    }
 
     updateCaixaButton();
+    setupCaixaUnlock();
+}
+
+// ---- Proteção por Senha — Aba de Relatórios ----
+let _pendingRelatoriosView = null;
+
+/** Chamada pelo onclick inline do botão pai "Relatórios" */
+window.requestRelatoriosToggle = function (anchorEl) {
+    const parentLi = anchorEl.closest('.has-submenu');
+    const lockIcon = document.getElementById('relatorios-lock-icon');
+
+    if (relatoriosUnlocked) {
+        // Já desbloqueado: apenas abre/fecha o submenu normalmente
+        parentLi.classList.toggle('open');
+        return;
+    }
+
+    // Bloqueado: guarda a intenção e abre o modal de senha
+    _pendingRelatoriosView = 'open-submenu';
+    const modal = document.getElementById('modal-liberar-caixa');
+    const input = document.getElementById('caixa-unlock-password');
+    const title = modal ? modal.querySelector('h3') : null;
+    if (title) title.innerHTML = '<i class="fa-solid fa-lock"></i> Acesso a Relatórios';
+    if (modal) {
+        modal.style.display = 'flex';
+        if (input) { input.value = ''; input.focus(); }
+    }
+};
+
+/** Revoga o acesso a relatórios e restaura o cadeado */
+function lockRelatorios() {
+    relatoriosUnlocked = false;
+    _pendingRelatoriosView = null;
+    const parentLi = document.getElementById('nav-relatorios-parent');
+    const lockIcon = document.getElementById('relatorios-lock-icon');
+    if (parentLi) parentLi.classList.remove('open');
+    if (lockIcon) {
+        lockIcon.className = 'fa-solid fa-lock submenu-icon';
+    }
+}
+
+function setupRelatoriosUnlock() {
+    const formLiberarCaixaEl = document.getElementById('form-liberar-caixa');
+    if (formLiberarCaixaEl && !formLiberarCaixaEl._relatoriosListenerAdded) {
+        formLiberarCaixaEl._relatoriosListenerAdded = true;
+        formLiberarCaixaEl.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const input = document.getElementById('caixa-unlock-password');
+            const password = input ? input.value : '';
+            const modal = document.getElementById('modal-liberar-caixa');
+            const title = modal ? modal.querySelector('h3') : null;
+
+            if (password === cashReleasePassword) {
+                if (input) input.value = '';
+                if (modal) modal.style.display = 'none';
+                if (title) title.innerHTML = '<i class="fa-solid fa-key"></i> Liberação de Caixa';
+
+                if (_pendingRelatoriosView === 'open-submenu') {
+                    // Desbloqueio da aba de Relatórios
+                    relatoriosUnlocked = true;
+                    _pendingRelatoriosView = null;
+
+                    // Abre o submenu e troca o ícone de cadeado para chevron
+                    const parentLi = document.getElementById('nav-relatorios-parent');
+                    const lockIcon = document.getElementById('relatorios-lock-icon');
+                    if (parentLi) parentLi.classList.add('open');
+                    if (lockIcon) lockIcon.className = 'fa-solid fa-chevron-down submenu-icon';
+                } else {
+                    // Acesso a valores do caixa (comportamento original)
+                    caixaValuesVisible = true;
+                    updateCaixaStatus();
+                }
+            } else {
+                showToast('Senha de liberação incorreta!', 'error');
+            }
+        });
+    }
+}
+
+function setupCaixaUnlock() {
+    if (btnToggleCaixaValues && !btnToggleCaixaValues._unlockListenerAdded) {
+        btnToggleCaixaValues._unlockListenerAdded = true;
+        btnToggleCaixaValues.addEventListener('click', () => {
+            if (caixaValuesVisible) {
+                // Apenas oculta, sem pedir senha
+                caixaValuesVisible = false;
+                updateCaixaStatus();
+            } else {
+                // Exige senha para mostrar
+                if (modalLiberarCaixa) {
+                    modalLiberarCaixa.style.display = 'flex';
+                    if (inputUnlockPassword) inputUnlockPassword.focus();
+                }
+            }
+        });
+    }
+
+    if (modalLiberarCaixaClose) {
+        modalLiberarCaixaClose.addEventListener('click', () => {
+            if (modalLiberarCaixa) modalLiberarCaixa.style.display = 'none';
+            // Restaura estado caso o modal tenha sido aberto para relatórios
+            _pendingRelatoriosView = null;
+            const title = modalLiberarCaixa ? modalLiberarCaixa.querySelector('h3') : null;
+            if (title) title.innerHTML = '<i class="fa-solid fa-key"></i> Liberação de Caixa';
+        });
+    }
+
+    // O submit do form agora é gerido pelo setupRelatoriosUnlock() de forma unificada.
+    // Apenas mantemos aqui o setup do botão de fechar.
 }
 
 function updateCaixaButton() {
     const today = getTodayKey();
     const todayCash = cashHistory.find(c => c.date === today);
-    
+
     if (todayCash) {
         if (todayCash.status === 'aberto') {
             btnCaixa.classList.add('caixa-aberto');
@@ -2327,15 +2617,15 @@ function updateCaixaStatus() {
     const today = getTodayKey();
     const todayCash = cashHistory.find(c => c.date === today);
     const caixaWarning = document.getElementById('caixa-warning');
-    
+
     if (todayCash) {
         if (caixaWarning) caixaWarning.style.display = 'none';
         caixaStatus.style.display = 'flex';
         caixaStatusDate.textContent = `Aberto às ${todayCash.openedAt} — ${formatDateBR(todayCash.date)}`;
-        caixaStatusObs.textContent = todayCash.observation || '';
-        caixaStatusObs.style.display = todayCash.observation ? 'block' : 'none';
+        caixaStatusObs.textContent = todayCash.obs || '';
+        caixaStatusObs.style.display = todayCash.obs ? 'block' : 'none';
 
-        const opening = todayCash.openingValue;
+        const opening = todayCash.initialValue;
         let servicesRevenue = todayCash.servicesValue;
         let total = todayCash.finalValue;
 
@@ -2343,14 +2633,18 @@ function updateCaixaStatus() {
             const todayServices = getTodayServices();
             const confirmedServices = todayServices.filter(s => s.status !== 'pendente');
             servicesRevenue = confirmedServices.reduce((acc, curr) => acc + curr.price, 0);
-            
-            // Add product sales to today's total if any
-            const todaySales = productSales.filter(s => s.date === today);
-            const salesRevenue = todaySales.reduce((acc, curr) => acc + (curr.price * curr.quantity), 0);
-            
+
+            // Filtra apenas vendas feitas APÓS a abertura deste caixa
+            // O ID da venda é Date.now() na criação, servindo como timestamp
+            const caixaOpenTs = todayCash.openedAtTs || 0;
+            const currentSales = caixaOpenTs > 0
+                ? productSales.filter(s => Number(s.id) >= caixaOpenTs)
+                : productSales.filter(s => s.date === today);
+            const salesRevenue = currentSales.reduce((acc, curr) => acc + (curr.price * curr.quantity), 0);
+
             servicesRevenue += salesRevenue;
             total = opening + servicesRevenue;
-            
+
             caixaBadge.innerHTML = '<i class="fa-solid fa-cash-register"></i> Caixa Aberto';
             caixaBadge.classList.remove('fechado');
             caixaStatus.classList.remove('fechado');
@@ -2365,6 +2659,25 @@ function updateCaixaStatus() {
         caixaValAbertura.textContent = `R$ ${opening.toFixed(2).replace('.', ',')}`;
         caixaValServicos.textContent = `R$ ${servicesRevenue.toFixed(2).replace('.', ',')}`;
         caixaValTotal.textContent = `R$ ${total.toFixed(2).replace('.', ',')}`;
+
+        // Controle de visibilidade dos valores (Senha de Liberação)
+        if (caixaValuesVisible) {
+            caixaValAbertura.classList.remove('masked-value');
+            caixaValServicos.classList.remove('masked-value');
+            caixaValTotal.classList.remove('masked-value');
+            if (btnToggleCaixaValues) {
+                btnToggleCaixaValues.innerHTML = '<i class="fa-solid fa-eye"></i>';
+                btnToggleCaixaValues.classList.add('active');
+            }
+        } else {
+            caixaValAbertura.classList.add('masked-value');
+            caixaValServicos.classList.add('masked-value');
+            caixaValTotal.classList.add('masked-value');
+            if (btnToggleCaixaValues) {
+                btnToggleCaixaValues.innerHTML = '<i class="fa-solid fa-eye-slash"></i>';
+                btnToggleCaixaValues.classList.remove('active');
+            }
+        }
     } else {
         caixaStatus.style.display = 'none';
         if (caixaWarning) caixaWarning.style.display = 'flex';
@@ -2382,18 +2695,18 @@ function setupEstoque() {
             const price = parseFloat(document.getElementById('prod-price').value);
             const stock = parseInt(document.getElementById('prod-stock').value) || 0;
 
-            const newProduct = { 
-                id: Math.floor(Date.now() + Math.random() * 1000), 
-                name, 
-                price, 
-                stock 
+            const newProduct = {
+                id: Math.floor(Date.now() + Math.random() * 1000),
+                name,
+                price,
+                stock
             };
             inventory.push(newProduct);
             saveInventoryToStorage();
             productForm.reset();
             renderInventory();
             populateProductSelect();
-            alert('Produto cadastrado!');
+            showToast('Produto cadastrado!', 'success');
         });
     }
 }
@@ -2439,7 +2752,7 @@ function setupVendas() {
         if (!product) return false;
 
         if (product.stock < qty) {
-            alert('Estoque insuficiente!');
+            showToast('Estoque insuficiente!', 'error');
             return false;
         }
 
@@ -2457,11 +2770,11 @@ function setupVendas() {
         productSales.unshift(newSale);
         saveInventoryToStorage();
         saveProductSalesToStorage();
-        
+
         formElement.reset();
         updateDashboard();
-        if(navFinanceiro && navFinanceiro.classList.contains('active')) updateFinanceiro();
-        alert('Venda realizada com sucesso!');
+        if (navFinanceiro && navFinanceiro.classList.contains('active')) updateFinanceiro();
+        showToast('Venda realizada com sucesso!', 'success');
         return true;
     }
 
@@ -2482,7 +2795,7 @@ function renderInventory() {
     inventory.forEach(p => {
         const tr = document.createElement('tr');
         const status = p.stock <= 3 ? '<span class="badge badge-low">Baixo</span>' : '<span class="badge badge-ok">Normal</span>';
-        
+
         tr.innerHTML = `
             <td>${p.name}</td>
             <td>R$ ${p.price.toFixed(2).replace('.', ',')}</td>
@@ -2512,7 +2825,7 @@ if (modalEditProduct) {
     modalEditProduct.addEventListener('click', (e) => { if (e.target === modalEditProduct) modalEditProduct.style.display = 'none'; });
 }
 
-window.openEditProduct = function(id) {
+window.openEditProduct = function (id) {
     const product = inventory.find(p => p.id === id);
     if (!product) return;
 
@@ -2541,7 +2854,7 @@ if (editProductForm) {
             renderInventory();
             populateProductSelect();
             modalEditProduct.style.display = 'none';
-            alert('Produto atualizado!');
+            showToast('Produto atualizado!', 'success');
         }
     });
 }
@@ -2550,7 +2863,7 @@ function populateProductSelect() {
     const select = document.getElementById('sale-product-select');
     const consumoSelect = document.getElementById('consumo-product-select');
     const modalSelect = document.getElementById('modal-sale-product-select');
-    
+
     const options = inventory.map(p => `<option value="${p.id}">${p.name} (Estoque: ${p.stock})</option>`).join('');
     const defaultOption = '<option value="" disabled selected>Selecione o produto</option>';
 
@@ -2559,13 +2872,13 @@ function populateProductSelect() {
     if (modalSelect) modalSelect.innerHTML = defaultOption + options;
 }
 
-window.deleteProduct = async function(id) {
-    if (confirm('Remover produto do estoque?')) {
+window.deleteProduct = async function (id) {
+    showConfirm('Excluir Produto', 'Remover produto do estoque?', async () => {
         // Remove do banco de dados
         const { error } = await supabaseClient.from('inventory').delete().eq('id', Math.floor(id));
         if (error) {
             console.error('Erro ao deletar produto no Supabase:', error);
-            alert('Erro ao excluir: ' + error.message);
+            showToast('Erro ao excluir: ' + error.message, 'error');
             return;
         }
 
@@ -2573,7 +2886,8 @@ window.deleteProduct = async function(id) {
         saveInventoryToStorage();
         renderInventory();
         populateProductSelect();
-    }
+        showToast('Produto removido!', 'success');
+    });
 };
 
 
@@ -2605,7 +2919,7 @@ function setupPerformanceFilters() {
             if (startInput.value && endInput.value) {
                 updatePerformanceReport();
             } else {
-                alert('Selecione as datas de início e fim.');
+                showToast('Selecione as datas de início e fim.', 'info');
             }
         });
     }
@@ -2656,22 +2970,22 @@ function renderPerformanceReportChart(startDate, endDate) {
     // Gerar lista de datas entre start e end
     const labels = [];
     const revenueData = [];
-    
+
     let current = new Date(startDate + 'T00:00:00');
     const last = new Date(endDate + 'T00:00:00');
 
     while (current <= last) {
         const dateKey = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}-${String(current.getDate()).padStart(2, '0')}`;
         labels.push(formatDateBR(dateKey).split('/')[0] + '/' + formatDateBR(dateKey).split('/')[1]);
-        
+
         const dayServices = allServices.filter(s => s.date === dateKey && s.status !== 'pendente');
         const servicesRev = dayServices.reduce((acc, curr) => acc + curr.price, 0);
-        
+
         const daySales = productSales.filter(s => s.date === dateKey);
         const salesRev = daySales.reduce((acc, curr) => acc + (curr.price * curr.quantity), 0);
-        
+
         revenueData.push(servicesRev + salesRev);
-        
+
         current.setDate(current.getDate() + 1);
     }
 
@@ -2705,7 +3019,7 @@ function renderPerformanceReportChart(startDate, endDate) {
                 legend: { display: false },
                 tooltip: {
                     callbacks: {
-                        label: function(context) {
+                        label: function (context) {
                             return 'Faturamento: R$ ' + context.parsed.y.toFixed(2).replace('.', ',');
                         }
                     }
@@ -2773,7 +3087,7 @@ function setupFaturamentoFilters() {
             if (startInput.value && endInput.value) {
                 updateRelatorioFaturamento();
             } else {
-                alert('Selecione as datas de início e fim.');
+                showToast('Selecione as datas de início e fim.', 'info');
             }
         });
     }
@@ -2783,7 +3097,7 @@ function updateRelatorioFaturamento() {
     const startInput = document.getElementById('fat-date-start');
     const endInput = document.getElementById('fat-date-end');
     const { start, end } = getDateRange(currentFatPeriod, startInput, endInput);
-    
+
     const body = document.getElementById('fat-history-body');
     const totalDisplay = document.getElementById('fat-total-display');
     if (!body) return;
@@ -2860,13 +3174,13 @@ if (modalServiceDetailsClose) {
     };
 }
 
-window.openServiceDetails = function(barberName, time) {
+window.openServiceDetails = function (barberName, time) {
     const today = getTodayKey();
     const slotAttendances = allServices.filter(s => s.barber === barberName && s.time === time && s.date === today);
     if (slotAttendances.length === 0) return;
 
     const isPending = slotAttendances.some(s => s.status === 'pendente');
-    
+
     serviceDetailsContent.innerHTML = `
         <div style="margin-bottom: 20px;">
             <p><strong>Barbeiro:</strong> ${barberName}</p>
@@ -2884,8 +3198,8 @@ window.openServiceDetails = function(barberName, time) {
             </thead>
             <tbody>
                 ${slotAttendances.map(s => {
-                    if (s.id === editingServiceInModal) {
-                        return `
+        if (s.id === editingServiceInModal) {
+            return `
                             <tr>
                                 <td>
                                     <select id="edit-inline-service" style="min-width: 120px; width: 100%; padding: 6px; font-size: 0.85rem; border-radius: 5px; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--primary-color);" onchange="updateInlinePrice(this.value)">
@@ -2903,8 +3217,8 @@ window.openServiceDetails = function(barberName, time) {
                                 </td>
                             </tr>
                         `;
-                    }
-                    return `
+        }
+        return `
                         <tr>
                             <td>${s.serviceName}</td>
                             <td>R$ ${s.price.toFixed(2).replace('.', ',')}</td>
@@ -2917,7 +3231,7 @@ window.openServiceDetails = function(barberName, time) {
                             </td>
                         </tr>
                     `;
-                }).join('')}
+    }).join('')}
                 <tr id="new-service-row" style="display: none; background: rgba(255,255,255,0.05);">
                     <td>
                         <select id="new-inline-service" style="min-width: 120px; width: 100%; padding: 6px; font-size: 0.85rem; border-radius: 5px; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--primary-color);" onchange="updateNewInlinePrice(this.value)">
@@ -2942,7 +3256,7 @@ window.openServiceDetails = function(barberName, time) {
     `;
 
     serviceDetailsActions.innerHTML = '';
-    
+
     if (isPending) {
         const btnConfirm = document.createElement('button');
         btnConfirm.className = 'btn-success'; // Mudado para verde
@@ -2967,7 +3281,7 @@ window.openServiceDetails = function(barberName, time) {
     modalServiceDetails.style.display = 'flex';
 };
 
-window.confirmServiceInSlot = function(barberName, time) {
+window.confirmServiceInSlot = function (barberName, time) {
     const today = getTodayKey();
     allServices.forEach(s => {
         if (s.barber === barberName && s.time === time && s.date === today) {
@@ -2977,28 +3291,28 @@ window.confirmServiceInSlot = function(barberName, time) {
     saveAppointmentsToStorage();
     modalServiceDetails.style.display = 'none';
     updateDashboard();
-    if(navFinanceiro && navFinanceiro.classList.contains('active')) updateFinanceiro();
-    alert('Atendimento confirmado com sucesso!');
+    if (navFinanceiro && navFinanceiro.classList.contains('active')) updateFinanceiro();
+    showToast('Atendimento confirmado com sucesso!', 'success');
 };
 
-window.updateNewInlinePrice = function(serviceId) {
+window.updateNewInlinePrice = function (serviceId) {
     const serviceObj = services.find(sc => sc.id === parseInt(serviceId));
     if (serviceObj) {
         document.getElementById('new-inline-price').value = serviceObj.defaultPrice.toFixed(2);
     }
 };
 
-window.saveNewInlineService = function(barberName, time) {
+window.saveNewInlineService = function (barberName, time) {
     const serviceId = document.getElementById('new-inline-service').value;
-    if (!serviceId) { alert('Selecione um serviço'); return; }
+    if (!serviceId) { showToast('Selecione um serviço', 'info'); return; }
     const price = parseFloat(document.getElementById('new-inline-price').value);
     const serviceObj = services.find(sc => sc.id === parseInt(serviceId));
-    
+
     // Tenta copiar a forma de pagamento do atendimento existente
     const today = getTodayKey();
     const existing = allServices.find(s => s.barber === barberName && s.time === time && s.date === today);
     const paymentMethod = existing ? existing.paymentMethod : 'Dinheiro';
-    
+
     const newEntry = {
         id: Math.floor(Date.now() + Math.random() * 1000),
         barber: barberName,
@@ -3009,19 +3323,19 @@ window.saveNewInlineService = function(barberName, time) {
         date: today,
         status: 'pendente'
     };
-    
+
     allServices.push(newEntry);
     saveAppointmentsToStorage();
     updateDashboard();
-    if(navFinanceiro && navFinanceiro.classList.contains('active')) updateFinanceiro();
+    if (navFinanceiro && navFinanceiro.classList.contains('active')) updateFinanceiro();
     openServiceDetails(barberName, time); // Reabre o modal atualizado
 };
 
 
-window.deleteServiceInSlot = async function(barberName, time) {
-    if (confirm(`Excluir todos os serviços deste horário para ${barberName}?`)) {
+window.deleteServiceInSlot = async function (barberName, time) {
+    showConfirm('Excluir Atendimentos', `Excluir todos os serviços deste horário para ${barberName}?`, async () => {
         const today = getTodayKey();
-        
+
         // Busca os serviços que serão excluídos para pegar os IDs
         const toDelete = allServices.filter(s => s.barber === barberName && s.time === time && s.date === today);
         const idsToDelete = toDelete.map(s => Math.floor(s.id));
@@ -3031,7 +3345,7 @@ window.deleteServiceInSlot = async function(barberName, time) {
             const { error } = await supabaseClient.from('appointments').delete().in('id', idsToDelete);
             if (error) {
                 console.error('Erro ao deletar agendamentos no Supabase:', error);
-                alert('Erro ao excluir: ' + error.message);
+                showToast('Erro ao excluir: ' + error.message, 'error');
                 return;
             }
         }
@@ -3039,28 +3353,29 @@ window.deleteServiceInSlot = async function(barberName, time) {
         allServices = allServices.filter(s => !(s.barber === barberName && s.time === time && s.date === today));
         saveAppointmentsToStorage();
         updateDashboard();
-        if(navFinanceiro && navFinanceiro.classList.contains('active')) updateFinanceiro();
-    }
+        if (navFinanceiro && navFinanceiro.classList.contains('active')) updateFinanceiro();
+        showToast('Atendimentos excluídos!', 'success');
+    });
 };
 
-window.startInlineEdit = function(id, barberName, time) {
+window.startInlineEdit = function (id, barberName, time) {
     editingServiceInModal = id;
     openServiceDetails(barberName, time);
 };
 
-window.cancelInlineEdit = function(barberName, time) {
+window.cancelInlineEdit = function (barberName, time) {
     editingServiceInModal = null;
     openServiceDetails(barberName, time);
 };
 
-window.updateInlinePrice = function(serviceId) {
+window.updateInlinePrice = function (serviceId) {
     const serviceObj = services.find(sc => sc.id === parseInt(serviceId));
     if (serviceObj) {
         document.getElementById('edit-inline-price').value = serviceObj.defaultPrice.toFixed(2);
     }
 };
 
-window.saveInlineEdit = function(id, barberName, time) {
+window.saveInlineEdit = function (id, barberName, time) {
     const serviceId = parseInt(document.getElementById('edit-inline-service').value);
     const price = parseFloat(document.getElementById('edit-inline-price').value);
     const serviceObj = services.find(sc => sc.id === serviceId);
@@ -3076,20 +3391,20 @@ window.saveInlineEdit = function(id, barberName, time) {
     }
 };
 
-window.deleteServiceFromModal = async function(id, barberName, time) {
-    if (confirm('Excluir este serviço?')) {
+window.deleteServiceFromModal = async function (id, barberName, time) {
+    showConfirm('Excluir Serviço', 'Excluir este serviço?', async () => {
         // Remove do banco de dados
         const { error } = await supabaseClient.from('appointments').delete().eq('id', Math.floor(id));
         if (error) {
             console.error('Erro ao deletar agendamento no Supabase:', error);
-            alert('Erro ao excluir: ' + error.message);
+            showToast('Erro ao excluir: ' + error.message, 'error');
             return;
         }
 
         allServices = allServices.filter(s => s.id !== id);
         saveAppointmentsToStorage();
         updateDashboard();
-        
+
         // Verifica se ainda existem serviços no slot para manter o modal aberto ou fechar
         const today = getTodayKey();
         const remaining = allServices.filter(s => s.barber === barberName && s.time === time && s.date === today);
@@ -3098,7 +3413,8 @@ window.deleteServiceFromModal = async function(id, barberName, time) {
         } else {
             modalServiceDetails.style.display = 'none';
         }
-    }
+        showToast('Serviço excluído!', 'success');
+    });
 };
 
 // Iniciar
