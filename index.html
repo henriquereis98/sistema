@@ -13,6 +13,14 @@
 </head>
 
 <body>
+    <!-- Overlay de Carregamento Inicial -->
+    <div id="initial-loading" class="initial-loading" style="display: none;">
+        <div class="loader-content">
+            <i class="fa-solid fa-scissors fa-spin"></i>
+            <p>Carregando sistema...</p>
+        </div>
+    </div>
+
     <!-- Tela de Login -->
     <div id="login-container" class="login-container">
         <div class="login-box glass">
@@ -67,10 +75,9 @@
                         </ul>
                     </li>
                     <li class="has-submenu" id="nav-relatorios-parent">
-                        <a href="#" class="submenu-toggle"
-                            onclick="this.closest('.has-submenu').classList.toggle('open'); return false;">
+                        <a href="#" class="submenu-toggle" onclick="requestRelatoriosToggle(this); return false;">
                             <i class="fa-solid fa-chart-bar"></i> Relatórios
-                            <i class="fa-solid fa-chevron-down submenu-icon"></i>
+                            <i class="fa-solid fa-lock submenu-icon" id="relatorios-lock-icon"></i>
                         </a>
                         <ul class="submenu">
                             <li id="nav-rel-caixa"><a href="#"><i class="fa-solid fa-cash-register"></i> Histórico de
@@ -117,7 +124,7 @@
             <button class="btn-venda-flutuante" id="btn-venda-flutuante">
                 <i class="fa-solid fa-cart-plus"></i> Nova Venda
             </button>
-            
+
             <!-- Botão Flutuante Caixa -->
             <button class="btn-caixa" id="btn-caixa">
                 <i class="fa-solid fa-cash-register"></i> Caixa
@@ -150,8 +157,8 @@
                             <option value="Cartão">Cartão</option>
                         </select>
                     </div>
-                    <button type="submit" class="btn-success" style="width: 100%;"><i
-                            class="fa-solid fa-cart-plus"></i> Finalizar Venda</button>
+                    <button type="submit" class="btn-success" style="width: 100%;"><i class="fa-solid fa-cart-plus"></i>
+                        Finalizar Venda</button>
                 </form>
             </div>
         </div>
@@ -180,6 +187,42 @@
                 </form>
             </div>
         </div>
+
+        <!-- Modal Liberar Valores do Caixa -->
+        <div class="modal-overlay" id="modal-liberar-caixa" style="display: none;">
+            <div class="modal-box glass" style="max-width: 350px;">
+                <div class="modal-header">
+                    <h3><i class="fa-solid fa-key"></i> Liberação de Caixa</h3>
+                    <button class="modal-close" id="modal-liberar-caixa-close">&times;</button>
+                </div>
+                <form id="form-liberar-caixa">
+                    <div class="form-group">
+                        <label for="caixa-unlock-password">Senha de Liberação</label>
+                        <input type="password" id="caixa-unlock-password" required placeholder="Digite a senha">
+                    </div>
+                    <button type="submit" class="btn-primary" style="width: 100%;">Liberar Visualização</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal de Confirmação Customizado -->
+        <div class="modal-overlay" id="modal-confirm" style="display: none;">
+            <div class="modal-box glass" style="max-width: 400px;">
+                <div class="modal-header">
+                    <h3 id="modal-confirm-title"><i class="fa-solid fa-triangle-exclamation"></i> Confirmação</h3>
+                </div>
+                <div style="padding: 10px 0 24px;">
+                    <p id="modal-confirm-message" style="color: var(--text-muted); font-size: 0.95rem; line-height: 1.6;"></p>
+                </div>
+                <div style="display: flex; gap: 12px;">
+                    <button id="modal-confirm-cancel" class="btn-secondary" style="flex: 1; padding: 12px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: var(--text-muted); cursor: pointer; font-size: 0.9rem; transition: all 0.2s;">Cancelar</button>
+                    <button id="modal-confirm-ok" class="btn-danger" style="flex: 1; padding: 12px; background: var(--danger-color); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: white; cursor: pointer; font-size: 0.9rem; font-weight: 600; transition: all 0.2s;">Confirmar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Container de Toasts -->
+        <div id="toast-container"></div>
 
 
         <!-- Main Content -->
@@ -220,7 +263,7 @@
                         </div>
                         <div class="caixa-val-divider">+</div>
                         <div class="caixa-val-item">
-                            <span class="caixa-val-label">Serviços</span>
+                            <span class="caixa-val-label">Serviços/Vendas</span>
                             <span class="caixa-val-number" id="caixa-val-servicos">R$ 0,00</span>
                         </div>
                         <div class="caixa-val-divider">=</div>
@@ -229,7 +272,10 @@
                             <span class="caixa-val-number" id="caixa-val-total">R$ 0,00</span>
                         </div>
                     </div>
-                    <div class="caixa-status-action">
+                    <div class="caixa-status-action" style="display: flex; gap: 10px; align-items: center;">
+                        <button class="btn-icon" id="btn-toggle-caixa-values" title="Mostrar/Ocultar Valores">
+                            <i class="fa-solid fa-eye-slash"></i>
+                        </button>
                         <button class="btn-danger btn-fechar-caixa" id="btn-fechar-caixa" style="display: none;">
                             <i class="fa-solid fa-lock"></i> Encerrar Expediente
                         </button>
