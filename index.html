@@ -5,11 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Barbearia do Zé - Controle Interno</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="/style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 
 <body>
@@ -25,7 +23,10 @@
     <div id="login-container" class="login-container">
         <div class="login-box glass">
             <div class="logo-login">
-                <i class="fa-solid fa-scissors"></i>
+                <div class="scissors-wrapper">
+                    <i class="fa-solid fa-scissors blade-top"></i>
+                    <i class="fa-solid fa-scissors blade-bottom"></i>
+                </div>
                 <h2>Barbearia do Zé</h2>
             </div>
             <p class="login-subtitle"></p>
@@ -57,7 +58,17 @@
                     <li class="active" id="nav-dashboard"><a href="#"><i class="fa-solid fa-chart-line"></i> Dashboard
                             do Dia</a></li>
                     <li id="nav-estoque"><a href="#"><i class="fa-solid fa-boxes-stacked"></i> Estoque</a></li>
-                    <li id="nav-financeiro"><a href="#"><i class="fa-solid fa-money-bill-trend-up"></i> Financeiro</a>
+                    <li class="has-submenu" id="nav-financeiro-parent">
+                        <a href="#" class="submenu-toggle" onclick="requestFinanceiroToggle(this); return false;">
+                            <i class="fa-solid fa-money-bill-trend-up"></i> Financeiro
+                            <i class="fa-solid fa-lock submenu-icon" id="financeiro-lock-icon"></i>
+                        </a>
+                        <ul class="submenu">
+                            <li id="nav-financeiro"><a href="#"><i class="fa-solid fa-chart-line"></i> Resumo</a></li>
+                            <li id="nav-vendas-history"><a href="#"><i class="fa-solid fa-cart-shopping"></i> Vendas Realizadas</a></li>
+                            <li id="nav-comissoes"><a href="#"><i class="fa-solid fa-hand-holding-dollar"></i> Comissões</a></li>
+                            <li id="nav-consumo"><a href="#"><i class="fa-solid fa-mug-hot"></i> Consumo Interno</a></li>
+                        </ul>
                     </li>
                     <li class="has-submenu" id="nav-gestao-parent">
                         <a href="#" class="submenu-toggle"
@@ -88,20 +99,6 @@
                                     Desempenho</a></li>
                             <li id="nav-rel-faturamento"><a href="#"><i class="fa-solid fa-money-bill-trend-up"></i>
                                     Relatório de Faturamento</a></li>
-                        </ul>
-                    </li>
-                    <li class="has-submenu" id="nav-vendas-parent">
-                        <a href="#" class="submenu-toggle"
-                            onclick="this.closest('.has-submenu').classList.toggle('open'); return false;">
-                            <i class="fa-solid fa-cart-shopping"></i> Vendas
-                            <i class="fa-solid fa-chevron-down submenu-icon"></i>
-                        </a>
-                        <ul class="submenu">
-                            <li id="nav-comissoes"><a href="#"><i class="fa-solid fa-hand-holding-dollar"></i>
-                                    Comissões</a>
-                            </li>
-                            <li id="nav-consumo"><a href="#"><i class="fa-solid fa-mug-hot"></i> Consumo Interno</a>
-                            </li>
                         </ul>
                     </li>
                 </ul>
@@ -407,6 +404,61 @@
                         <!-- Preenchido via JS -->
                     </div>
                 </section>
+            </div>
+
+            <!-- View: Histórico de Vendas -->
+            <div id="view-vendas-history" style="display: none;">
+                <div class="header-actions">
+                    <h2 class="view-title"></h2>
+                </div>
+
+                <div class="report-filters glass">
+                    <div class="filter-chips">
+                        <button class="chip active" data-v-hist-period="today">Hoje</button>
+                        <button class="chip" data-v-hist-period="7days">Últimos 7 dias</button>
+                        <button class="chip" data-v-hist-period="30days">Últimos 30 dias</button>
+                        <button class="chip" data-v-hist-period="month">Mês Atual</button>
+                        <button class="chip" data-v-hist-period="custom">Personalizado</button>
+                    </div>
+                    <div class="custom-date-range" id="v-hist-custom-date-range" style="display: none;">
+                        <div class="date-input-group">
+                            <label>De</label>
+                            <input type="date" id="v-hist-date-start">
+                        </div>
+                        <div class="date-input-group">
+                            <label>Até</label>
+                            <input type="date" id="v-hist-date-end">
+                        </div>
+                        <button class="btn-primary btn-filter" id="v-hist-btn-apply-filter">Filtrar</button>
+                    </div>
+                </div>
+
+                <div class="content-grid" style="grid-template-columns: 1fr;">
+                    <section class="history-section glass">
+                        <h3>Vendas Realizadas</h3>
+                        <div class="table-responsive">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Data</th>
+                                        <th>Produto</th>
+                                        <th>Qtd.</th>
+                                        <th>Pagamento</th>
+                                        <th>Total</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="vendas-history-body">
+                                    <!-- Preenchido via JS -->
+                                </tbody>
+                            </table>
+                            <div id="vendas-history-empty" class="empty-state" style="display: none;">
+                                <i class="fa-solid fa-cart-shopping"></i>
+                                <p>Nenhuma venda encontrada no período.</p>
+                            </div>
+                        </div>
+                    </section>
+                </div>
             </div>
 
             <!-- View: Comissões -->
@@ -1101,7 +1153,7 @@
         </div>
     </div>
 
-    <script src="script.js"></script>
+    <script type="module" src="/script.js"></script>
 </body>
 
 </html>

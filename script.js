@@ -1,18 +1,17 @@
-// Configuração Supabase
-const SUPABASE_URL = 'https://cdxinqkxeldhwjkxewix.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_xDdX6gLJNfepejiEcbs7tA_Y7BWID0E';
+import { createClient } from '@supabase/supabase-js';
+import Chart from 'chart.js/auto';
+
+// Configuração Supabase via Variáveis de Ambiente (Vite)
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 let supabaseClient = null;
 let currentTenantId = null;
-let currentUser = null; // Unificando para manter compatibilidade com o resto do código
+let currentUser = null;
 
-// Inicializa o Supabase com persistência de sessão apenas na aba (sessionStorage)
+// Inicializa o Supabase
 function initSupabase() {
     try {
-        if (typeof supabase === 'undefined') {
-            console.error('Erro: Biblioteca Supabase não encontrada. Verifique sua conexão com a internet.');
-            return false;
-        }
-        supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+        supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY, {
             auth: {
                 persistSession: true,
                 storage: window.sessionStorage
@@ -58,6 +57,7 @@ let allConsumption = [];
 let inventory = [];
 let productSales = [];
 let currentVendasPeriod = 'today';
+let currentVendasHistoryPeriod = 'today';
 let currentPerfPeriod = '7days';
 let currentFatPeriod = 'today';
 let currentFatType = 'total';
@@ -67,6 +67,7 @@ let selectedServicesForNewEntry = [];
 let caixaValuesVisible = false;
 let cashReleasePassword = '1204'; // Valor padrão que será atualizado pelo banco
 let relatoriosUnlocked = false; // Controla o acesso à aba de Relatórios
+let financeiroUnlocked = false; // Controla o acesso à aba de Financeiro
 
 // ---- Helpers de Data ----
 function getTodayKey() {
@@ -295,7 +296,9 @@ const paymentMethodsGrid = document.getElementById('payment-methods-grid');
 
 // Elementos do DOM - Comissões
 const navComissoes = document.getElementById('nav-comissoes');
+const navVendasHistory = document.getElementById('nav-vendas-history');
 const viewComissoes = document.getElementById('view-comissoes');
+const viewVendasHistory = document.getElementById('view-vendas-history');
 const comBarberSelect = document.getElementById('com-barber-select');
 const comTotalProduction = document.getElementById('com-total-production');
 const comTotalCommission = document.getElementById('com-total-commission');
@@ -604,8 +607,6 @@ async function showApp() {
         currentUserAvatar.textContent = (currentUser.name || currentUser.username).charAt(0).toUpperCase();
     }
 
-
-
     // Init App Logic
     displayCurrentDate();
     startTimeTicker();
@@ -624,6 +625,10 @@ async function showApp() {
     setupConfigServices();
     setupPerformanceFilters();
     setupFaturamentoFilters();
+    setupVendasHistoryFilters();
+
+    // Sempre inicia no dashboard
+    switchView('dashboard');
 }
 
 if (btnLogout) {
@@ -664,27 +669,27 @@ function startTimeTicker() {
 
 // ---- Navegação ----
 function setupNavigation() {
-    // Navegação no dashboard, estoque, financeiro — revogam o acesso a relatórios
-    if (navDashboard) navDashboard.addEventListener('click', (e) => { e.preventDefault(); lockRelatorios(); switchView('dashboard'); });
+    // Navegação comum — revoga o acesso a tudo que é protegido
+    const lockAll = () => { lockRelatorios(); lockFinanceiro(); };
+
+    if (navDashboard) navDashboard.addEventListener('click', (e) => { e.preventDefault(); lockAll(); switchView('dashboard'); });
+    if (navEstoque) navEstoque.addEventListener('click', (e) => { e.preventDefault(); lockAll(); switchView('estoque'); });
+    if (navGestaoBarbeiros) navGestaoBarbeiros.addEventListener('click', (e) => { e.preventDefault(); lockAll(); switchView('gestao-barbeiros'); });
+    if (navGestaoServicos) navGestaoServicos.addEventListener('click', (e) => { e.preventDefault(); lockAll(); switchView('gestao-servicos'); });
+    if (navGestaoUsuarios) navGestaoUsuarios.addEventListener('click', (e) => { e.preventDefault(); lockAll(); switchView('gestao-usuarios'); });
+    if (navConfig) navConfig.addEventListener('click', (e) => { e.preventDefault(); lockAll(); switchView('config'); });
+
+    // Grupo Financeiro — ao navegar aqui, bloqueia Relatórios
     if (navFinanceiro) navFinanceiro.addEventListener('click', (e) => { e.preventDefault(); lockRelatorios(); switchView('financeiro'); });
+    if (navVendasHistory) navVendasHistory.addEventListener('click', (e) => { e.preventDefault(); lockRelatorios(); switchView('vendas-history'); });
     if (navComissoes) navComissoes.addEventListener('click', (e) => { e.preventDefault(); lockRelatorios(); switchView('comissoes'); });
     if (navConsumo) navConsumo.addEventListener('click', (e) => { e.preventDefault(); lockRelatorios(); switchView('consumo'); });
 
-    if (navEstoque) navEstoque.addEventListener('click', (e) => { e.preventDefault(); lockRelatorios(); switchView('estoque'); });
-
-    // Submenu Toggles (Now handled by inline onclick in HTML)
-
-    // Relatórios — sub-abas navegam livremente após o pai ser desbloqueado
-    if (navRelCaixa) navRelCaixa.addEventListener('click', (e) => { e.preventDefault(); switchView('rel-caixa'); });
-    if (navRelServicos) navRelServicos.addEventListener('click', (e) => { e.preventDefault(); switchView('rel-servicos'); });
-    if (navRelDesempenho) navRelDesempenho.addEventListener('click', (e) => { e.preventDefault(); switchView('rel-desempenho'); });
-    if (navRelFaturamento) navRelFaturamento.addEventListener('click', (e) => { e.preventDefault(); switchView('rel-faturamento'); });
-
-    if (navGestaoBarbeiros) navGestaoBarbeiros.addEventListener('click', (e) => { e.preventDefault(); lockRelatorios(); switchView('gestao-barbeiros'); });
-    if (navGestaoServicos) navGestaoServicos.addEventListener('click', (e) => { e.preventDefault(); lockRelatorios(); switchView('gestao-servicos'); });
-    if (navGestaoUsuarios) navGestaoUsuarios.addEventListener('click', (e) => { e.preventDefault(); lockRelatorios(); switchView('gestao-usuarios'); });
-
-    navConfig.addEventListener('click', (e) => { e.preventDefault(); lockRelatorios(); switchView('config'); });
+    // Grupo Relatórios — ao navegar aqui, bloqueia Financeiro
+    if (navRelCaixa) navRelCaixa.addEventListener('click', (e) => { e.preventDefault(); lockFinanceiro(); switchView('rel-caixa'); });
+    if (navRelServicos) navRelServicos.addEventListener('click', (e) => { e.preventDefault(); lockFinanceiro(); switchView('rel-servicos'); });
+    if (navRelDesempenho) navRelDesempenho.addEventListener('click', (e) => { e.preventDefault(); lockFinanceiro(); switchView('rel-desempenho'); });
+    if (navRelFaturamento) navRelFaturamento.addEventListener('click', (e) => { e.preventDefault(); lockFinanceiro(); switchView('rel-faturamento'); });
 }
 
 function switchView(viewName) {
@@ -702,10 +707,12 @@ function switchView(viewName) {
     if (navGestaoUsuarios) navGestaoUsuarios.classList.remove('active');
     if (navRelDesempenho) navRelDesempenho.classList.remove('active');
     if (navRelFaturamento) navRelFaturamento.classList.remove('active');
+    if (navVendasHistory) navVendasHistory.classList.remove('active');
 
     if (viewEstoque) viewEstoque.style.display = 'none';
     if (viewDashboard) viewDashboard.style.display = 'none';
     if (viewFinanceiro) viewFinanceiro.style.display = 'none';
+    if (viewVendasHistory) viewVendasHistory.style.display = 'none';
     if (viewComissoes) viewComissoes.style.display = 'none';
     if (viewConsumo) viewConsumo.style.display = 'none';
     if (viewRelCaixa) viewRelCaixa.style.display = 'none';
@@ -730,6 +737,11 @@ function switchView(viewName) {
         if (viewFinanceiro) viewFinanceiro.style.display = 'block';
         pageTitle.textContent = 'Resumo Financeiro';
         updateFinanceiro();
+    } else if (viewName === 'vendas-history') {
+        if (navVendasHistory) navVendasHistory.classList.add('active');
+        if (viewVendasHistory) viewVendasHistory.style.display = 'block';
+        pageTitle.textContent = 'Histórico de Vendas';
+        updateVendasHistory();
     } else if (viewName === 'rel-caixa') {
         if (navRelCaixa) navRelCaixa.classList.add('active');
         if (viewRelCaixa) viewRelCaixa.style.display = 'block';
@@ -2485,21 +2497,17 @@ function setupCaixa() {
     setupCaixaUnlock();
 }
 
-// ---- Proteção por Senha — Aba de Relatórios ----
+// ---- Proteção por Senha — Abas Restritas ----
 let _pendingRelatoriosView = null;
+let _pendingFinanceiroView = null;
 
 /** Chamada pelo onclick inline do botão pai "Relatórios" */
 window.requestRelatoriosToggle = function (anchorEl) {
     const parentLi = anchorEl.closest('.has-submenu');
-    const lockIcon = document.getElementById('relatorios-lock-icon');
-
     if (relatoriosUnlocked) {
-        // Já desbloqueado: apenas abre/fecha o submenu normalmente
         parentLi.classList.toggle('open');
         return;
     }
-
-    // Bloqueado: guarda a intenção e abre o modal de senha
     _pendingRelatoriosView = 'open-submenu';
     const modal = document.getElementById('modal-liberar-caixa');
     const input = document.getElementById('caixa-unlock-password');
@@ -2511,16 +2519,40 @@ window.requestRelatoriosToggle = function (anchorEl) {
     }
 };
 
-/** Revoga o acesso a relatórios e restaura o cadeado */
+/** Chamada pelo onclick inline do botão pai "Financeiro" */
+window.requestFinanceiroToggle = function (anchorEl) {
+    const parentLi = anchorEl.closest('.has-submenu');
+    if (financeiroUnlocked) {
+        parentLi.classList.toggle('open');
+        return;
+    }
+    _pendingFinanceiroView = 'open-submenu';
+    const modal = document.getElementById('modal-liberar-caixa');
+    const input = document.getElementById('caixa-unlock-password');
+    const title = modal ? modal.querySelector('h3') : null;
+    if (title) title.innerHTML = '<i class="fa-solid fa-lock"></i> Acesso ao Financeiro';
+    if (modal) {
+        modal.style.display = 'flex';
+        if (input) { input.value = ''; input.focus(); }
+    }
+};
+
 function lockRelatorios() {
     relatoriosUnlocked = false;
     _pendingRelatoriosView = null;
     const parentLi = document.getElementById('nav-relatorios-parent');
     const lockIcon = document.getElementById('relatorios-lock-icon');
     if (parentLi) parentLi.classList.remove('open');
-    if (lockIcon) {
-        lockIcon.className = 'fa-solid fa-lock submenu-icon';
-    }
+    if (lockIcon) lockIcon.className = 'fa-solid fa-lock submenu-icon';
+}
+
+function lockFinanceiro() {
+    financeiroUnlocked = false;
+    _pendingFinanceiroView = null;
+    const parentLi = document.getElementById('nav-financeiro-parent');
+    const lockIcon = document.getElementById('financeiro-lock-icon');
+    if (parentLi) parentLi.classList.remove('open');
+    if (lockIcon) lockIcon.className = 'fa-solid fa-lock submenu-icon';
 }
 
 function setupRelatoriosUnlock() {
@@ -2540,17 +2572,20 @@ function setupRelatoriosUnlock() {
                 if (title) title.innerHTML = '<i class="fa-solid fa-key"></i> Liberação de Caixa';
 
                 if (_pendingRelatoriosView === 'open-submenu') {
-                    // Desbloqueio da aba de Relatórios
                     relatoriosUnlocked = true;
                     _pendingRelatoriosView = null;
-
-                    // Abre o submenu e troca o ícone de cadeado para chevron
                     const parentLi = document.getElementById('nav-relatorios-parent');
                     const lockIcon = document.getElementById('relatorios-lock-icon');
                     if (parentLi) parentLi.classList.add('open');
                     if (lockIcon) lockIcon.className = 'fa-solid fa-chevron-down submenu-icon';
+                } else if (_pendingFinanceiroView === 'open-submenu') {
+                    financeiroUnlocked = true;
+                    _pendingFinanceiroView = null;
+                    const parentLi = document.getElementById('nav-financeiro-parent');
+                    const lockIcon = document.getElementById('financeiro-lock-icon');
+                    if (parentLi) parentLi.classList.add('open');
+                    if (lockIcon) lockIcon.className = 'fa-solid fa-chevron-down submenu-icon';
                 } else {
-                    // Acesso a valores do caixa (comportamento original)
                     caixaValuesVisible = true;
                     updateCaixaStatus();
                 }
@@ -2742,50 +2777,148 @@ function setupVendas() {
             }
         });
     }
+}
 
-    function processSaleFormSubmit(prodSelectId, qtyId, paymentId, formElement) {
-        const prodId = parseInt(document.getElementById(prodSelectId).value);
-        const qty = parseInt(document.getElementById(qtyId).value);
-        const payment = document.getElementById(paymentId).value;
+function processSaleFormSubmit(prodSelectId, qtyId, paymentId, formElement) {
+    const prodId = parseInt(document.getElementById(prodSelectId).value);
+    const qty = parseInt(document.getElementById(qtyId).value);
+    const payment = document.getElementById(paymentId).value;
 
-        const product = inventory.find(p => p.id === prodId);
-        if (!product) return false;
+    const product = inventory.find(p => p.id === prodId);
+    if (!product) return false;
 
-        if (product.stock < qty) {
-            showToast('Estoque insuficiente!', 'error');
-            return false;
+    if (product.stock < qty) {
+        showToast('Estoque insuficiente!', 'error');
+        return false;
+    }
+
+    product.stock -= qty;
+    const newSale = {
+        id: Date.now(),
+        productId: prodId,
+        productName: product.name,
+        price: product.price,
+        quantity: qty,
+        paymentMethod: payment,
+        date: getTodayKey()
+    };
+
+    productSales.unshift(newSale);
+    saveInventoryToStorage();
+    saveProductSalesToStorage();
+
+    formElement.reset();
+    updateDashboard();
+    if (navFinanceiro && navFinanceiro.classList.contains('active')) updateFinanceiro();
+    if (navVendasHistory && navVendasHistory.classList.contains('active')) updateVendasHistory();
+    showToast('Venda realizada com sucesso!', 'success');
+    return true;
+}
+
+// ---- Gerenciamento de Vendas (Histórico) ----
+function setupVendasHistoryFilters() {
+    const chips = document.querySelectorAll('#view-vendas-history .chip[data-v-hist-period]');
+    const customRange = document.getElementById('v-hist-custom-date-range');
+    const startInput = document.getElementById('v-hist-date-start');
+    const endInput = document.getElementById('v-hist-date-end');
+    const btnApply = document.getElementById('v-hist-btn-apply-filter');
+
+    chips.forEach(chip => {
+        chip.addEventListener('click', () => {
+            chips.forEach(c => c.classList.remove('active'));
+            chip.classList.add('active');
+            currentVendasHistoryPeriod = chip.dataset.vHistPeriod;
+
+            if (currentVendasHistoryPeriod === 'custom') {
+                customRange.style.display = 'flex';
+            } else {
+                customRange.style.display = 'none';
+                updateVendasHistory();
+            }
+        });
+    });
+
+    if (btnApply) {
+        btnApply.addEventListener('click', () => {
+            if (startInput.value && endInput.value) {
+                updateVendasHistory();
+            } else {
+                showToast('Selecione as datas.', 'info');
+            }
+        });
+    }
+}
+
+function updateVendasHistory() {
+    const startInput = document.getElementById('v-hist-date-start');
+    const endInput = document.getElementById('v-hist-date-end');
+    const { start, end } = getDateRange(currentVendasHistoryPeriod, startInput, endInput);
+
+    const body = document.getElementById('vendas-history-body');
+    const emptyState = document.getElementById('vendas-history-empty');
+    if (!body) return;
+
+    const filtered = productSales.filter(s => s.date >= start && s.date <= end);
+    body.innerHTML = '';
+
+    if (filtered.length === 0) {
+        emptyState.style.display = 'block';
+        return;
+    }
+    emptyState.style.display = 'none';
+
+    filtered.forEach(s => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${formatDateBR(s.date)}</td>
+            <td>${s.productName}</td>
+            <td>${s.quantity}</td>
+            <td>${s.paymentMethod}</td>
+            <td><strong>R$ ${(s.price * s.quantity).toFixed(2).replace('.', ',')}</strong></td>
+            <td>
+                <button class="btn-icon delete" title="Excluir Venda" onclick="deleteSale(${s.id})">
+                    <i class="fa-solid fa-trash"></i>
+                </button>
+            </td>
+        `;
+        body.appendChild(tr);
+    });
+}
+
+window.deleteSale = async function (id) {
+    showConfirm('Excluir Venda', 'Deseja excluir esta venda? O produto retornará ao estoque.', async () => {
+        const sale = productSales.find(s => s.id === id);
+        if (!sale) return;
+
+        // 1. Deletar do Banco
+        const { error } = await supabaseClient.from('product_sales').delete().eq('id', id);
+        if (error) {
+            showToast('Erro ao excluir do banco: ' + error.message, 'error');
+            return;
         }
 
-        product.stock -= qty;
-        const newSale = {
-            id: Date.now(),
-            productId: prodId,
-            productName: product.name,
-            price: product.price,
-            quantity: qty,
-            paymentMethod: payment,
-            date: getTodayKey()
-        };
+        // 2. Restaurar Estoque no Banco
+        const product = inventory.find(p => p.id === sale.productId);
+        if (product) {
+            product.stock += sale.quantity;
+            await supabaseClient.from('inventory').update({ stock: product.stock }).eq('id', product.id);
+        }
 
-        productSales.unshift(newSale);
+        // 3. Atualizar Local
+        productSales = productSales.filter(s => s.id !== id);
         saveInventoryToStorage();
         saveProductSalesToStorage();
 
-        formElement.reset();
+        updateVendasHistory();
+        renderInventory();
+        populateProductSelect();
         updateDashboard();
         if (navFinanceiro && navFinanceiro.classList.contains('active')) updateFinanceiro();
-        showToast('Venda realizada com sucesso!', 'success');
-        return true;
-    }
 
-    // Setup Vendas Filters
-    const chips = document.querySelectorAll('.chip[data-sale-period]');
-    const customRange = document.getElementById('sale-custom-date-range');
-    const startInput = document.getElementById('sale-date-start');
-    const endInput = document.getElementById('sale-date-end');
-    const btnApply = document.getElementById('sale-btn-apply-filter');
+        showToast('Venda excluída e estoque restaurado!', 'success');
+    });
+};
 
-}
 
 function renderInventory() {
     const list = document.getElementById('inventory-list');
@@ -3416,6 +3549,34 @@ window.deleteServiceFromModal = async function (id, barberName, time) {
         showToast('Serviço excluído!', 'success');
     });
 };
+
+// ---- Exportação para o Escopo Global (Necessário para onclicks do HTML) ----
+window.editService = editService;
+window.deleteService = deleteService;
+window.openServiceDetails = openServiceDetails;
+window.confirmServiceInSlot = confirmServiceInSlot;
+window.deleteServiceInSlot = deleteServiceInSlot;
+window.editUser = editUser;
+window.deleteUser = deleteUser;
+window.openEditProduct = openEditProduct;
+window.deleteProduct = deleteProduct;
+window.deleteSale = deleteSale;
+window.deleteConsumo = deleteConsumo;
+window.updateInlinePrice = updateInlinePrice;
+window.updateNewInlinePrice = updateNewInlinePrice;
+window.saveInlineEdit = saveInlineEdit;
+window.cancelInlineEdit = cancelInlineEdit;
+window.saveNewInlineService = saveNewInlineService;
+window.startInlineEdit = startInlineEdit;
+window.deleteServiceFromModal = deleteServiceFromModal;
+window.requestRelatoriosToggle = requestRelatoriosToggle;
+window.requestFinanceiroToggle = requestFinanceiroToggle;
+window.lockRelatorios = lockRelatorios;
+window.lockFinanceiro = lockFinanceiro;
+window.updateFinanceiro = updateFinanceiro;
+window.updateReportsCaixa = updateReportsCaixa;
+window.updateReportsServicos = updateReportsServicos;
+window.updateVendasHistory = updateVendasHistory;
 
 // Iniciar
 init();
