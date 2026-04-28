@@ -1,0 +1,29 @@
+{
+  "name": "sistema",
+  "version": "1.0.0",
+  "description": "Sistema de Gestão para Barbearia",
+  "main": "script.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/henriquereis98/sistema.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/henriquereis98/sistema/issues"
+  },
+  "homepage": "https://github.com/henriquereis98/sistema#readme",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1",
+    "chart.js": "^4.5.1",
+    "vite": "^6.2.0"
+  }
+}
